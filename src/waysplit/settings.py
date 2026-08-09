@@ -25,7 +25,7 @@ class Settings(BaseModel):
     data_dir: Path = Path("./data")
     retain_source: bool = False
     max_upload_mib: int = Field(default=25, ge=1, le=250)
-    max_pages: int = Field(default=24, ge=1, le=100)
+    max_pages: int = Field(default=60, ge=1, le=100)
     model_endpoints: tuple[str, ...] = DEFAULT_MODEL_ENDPOINTS
     allow_remote_model_endpoints: bool = False
     model_api_key: SecretStr | None = None

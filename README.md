@@ -8,7 +8,7 @@ and prepares a Splitwise expense for explicit approval.
 Open the browser app at `http://127.0.0.1:9876`. There is no cloud-model
 fallback, no analytics, and no automatic external posting.
 
-> **Release status:** `v0.1.1` is an operational, production-minded alpha for a
+> **Release status:** `v0.1.3` is an operational, production-minded alpha for a
 > single operator on a trusted Mac or Linux host. The full browser-to-Splitwise
 > flow ships, but model extraction can still be wrong even when totals match.
 > Review every charge and allocation before posting.
@@ -217,7 +217,7 @@ YAML. Common settings are:
 | `WAYSPLIT_MODEL_TIMEOUT_SECONDS` | `300` | Model request timeout |
 | `WAYSPLIT_RETAIN_SOURCE` | `false` | Keep the original statement after extraction |
 | `WAYSPLIT_MAX_UPLOAD_MIB` | `25` | Upload byte limit |
-| `WAYSPLIT_MAX_PAGES` | `24` | PDF page limit |
+| `WAYSPLIT_MAX_PAGES` | `60` | PDF page limit |
 | `WAYSPLIT_RECONCILIATION_TOLERANCE` | `0.00` | Must remain zero for posting |
 | `WAYSPLIT_MINIMUM_EXTRACTION_CONFIDENCE` | `0.80` | Per-charge confidence gate |
 | `WAYSPLIT_REQUIRE_CHARGE_EVIDENCE` | `true` | Require evidence on every charge |

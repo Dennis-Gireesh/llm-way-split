@@ -3,6 +3,11 @@
 This file records user-visible and trust-boundary changes for each immutable
 release. Dates use UTC.
 
+## 0.1.3 — 2026-08-09
+
+Raised the default statement page limit from 24 to 60 so ordinary multi-page
+mobile bills can be processed without configuration changes.
+
 ## 0.1.2 — 2026-08-09
 
 Launcher correction: fresh installs now pull the password-free `v0.1.1`

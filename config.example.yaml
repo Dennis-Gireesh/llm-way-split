@@ -4,7 +4,7 @@ app:
   data_dir: ./data
   retain_source: false
   max_upload_mib: 25
-  max_pages: 24
+  max_pages: 60
 
 models:
   endpoints:
