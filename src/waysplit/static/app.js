@@ -11,15 +11,11 @@
     household: null,
     householdSaved: false,
     lockedParticipantIds: new Set(),
-    splitwiseToken: null,
-    splitwiseContext: null,
     statementFile: null,
     activeRun: null,
     runs: [],
     pollTimer: null,
     jsonEditorDirty: false,
-    confirmationToken: null,
-    rollbackConfirmationToken: null,
   };
 
   const refs = {};
@@ -174,24 +170,8 @@
       "household-form",
       "participant-list",
       "add-participant",
-      "payer-select",
-      "group-id",
-      "output-destination",
       "save-household",
       "household-save-state",
-      "splitwise-connect",
-      "splitwise-connect-form",
-      "connect-token",
-      "connect-terms",
-      "connect-splitwise",
-      "splitwise-connect-state",
-      "splitwise-connection-badge",
-      "splitwise-context",
-      "splitwise-current-user",
-      "splitwise-group-choice",
-      "splitwise-member-mapping",
-      "apply-splitwise-context",
-      "forget-splitwise",
       "upload-model-chip",
       "upload-form",
       "drop-zone",
@@ -225,16 +205,11 @@
       "build-preview",
       "preview-empty",
       "preview-content",
-      "posting-outcome",
       "preview-description",
       "preview-cost",
       "preview-meta",
-      "preview-digest",
       "preview-shares",
       "preview-blockers",
-      "approval-title",
-      "approval-copy",
-      "open-confirmation",
       "refresh-history",
       "run-history",
       "history-count",
@@ -244,22 +219,6 @@
       "audit-copy",
       "audit-details",
       "verify-audit",
-      "confirmation-dialog",
-      "confirmation-form",
-      "confirmation-summary",
-      "ack-preview",
-      "accept-terms",
-      "splitwise-token",
-      "confirmation-state",
-      "confirm-post",
-      "rollback-dialog",
-      "rollback-form",
-      "rollback-summary",
-      "ack-rollback-target",
-      "rollback-phrase",
-      "rollback-token",
-      "rollback-state",
-      "confirm-rollback",
       "toast-region",
       "rail-trust-title",
       "rail-trust-copy",
@@ -286,29 +245,6 @@
     });
     refs["household-form"].addEventListener("input", () => markHouseholdDirty());
     refs["household-form"].addEventListener("change", () => markHouseholdDirty());
-    refs["payer-select"].addEventListener("change", (event) => {
-      state.household.payer_participant_id = event.target.value || null;
-    });
-    refs["group-id"].addEventListener("input", (event) => {
-      state.household.splitwise_group_id = event.target.value === "" ? null : Number(event.target.value);
-    });
-    refs["output-destination"].addEventListener("change", (event) => {
-      state.household.output_destination = event.target.value;
-      renderHousehold();
-    });
-    refs["connect-splitwise"].addEventListener("click", connectSplitwise);
-    ["input", "change"].forEach((eventName) => {
-      refs["splitwise-connect"].addEventListener(eventName, (event) => event.stopPropagation());
-    });
-    refs["connect-token"].addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        connectSplitwise();
-      }
-    });
-    refs["splitwise-group-choice"].addEventListener("change", renderSplitwiseMemberMapping);
-    refs["apply-splitwise-context"].addEventListener("click", applySplitwiseContext);
-    refs["forget-splitwise"].addEventListener("click", forgetSplitwise);
     refs["statement-input"].addEventListener("change", () => {
       const files = refs["statement-input"].files;
       state.statementFile = files && files.length ? files[0] : null;
@@ -342,25 +278,10 @@
     refs["save-bill-json"].addEventListener("click", saveBillCorrection);
     refs["build-preview"].addEventListener("click", buildPreview);
     refs["copy-whatsapp-summary"].addEventListener("click", copyWhatsAppSummary);
-    refs["open-confirmation"].addEventListener("click", openConfirmation);
-    refs["confirmation-form"].addEventListener("submit", postConfirmedPreview);
-    refs["rollback-form"].addEventListener("submit", rollbackPosting);
-    [refs["rollback-phrase"], refs["ack-rollback-target"]].forEach((element) => {
-      element.addEventListener("input", updateRollbackButton);
-      element.addEventListener("change", updateRollbackButton);
-    });
     refs["refresh-history"].addEventListener("click", refreshRecords);
     refs["verify-audit"].addEventListener("click", verifyAudit);
     document.querySelectorAll("[data-close-dialog]").forEach((button) => {
       button.addEventListener("click", () => closeDialog(byId(button.dataset.closeDialog)));
-    });
-    [refs["confirmation-dialog"], refs["rollback-dialog"]].forEach((dialog) => {
-      dialog.addEventListener("close", () => clearDialogSecrets(dialog));
-      dialog.addEventListener("click", (event) => {
-        if (event.target === dialog) {
-          closeDialog(dialog);
-        }
-      });
     });
     observeSections();
   }
@@ -484,19 +405,19 @@
 
   function statusLabel(status) {
     const labels = {
-      queued: "Queued",
+      queued: "Waiting",
       extracting: "Extracting locally",
       needs_review: "Needs review",
       blocked: "Blocked",
-      ready: "Ready to confirm",
-      submitting: "Posting",
-      rollback_submitting: "Deleting from Splitwise",
-      rollback_ambiguous: "Rollback outcome ambiguous",
-      posted: "Posted & verified",
-      posted_unverified: "Posted · unverified",
-      ambiguous: "Ambiguous outcome",
+      ready: "Ready",
+      submitting: "Saving",
+      rollback_submitting: "Finishing",
+      rollback_ambiguous: "Needs attention",
+      posted: "Complete",
+      posted_unverified: "Needs attention",
+      ambiguous: "Needs attention",
       failed: "Failed",
-      rolled_back: "Rolled back",
+      rolled_back: "Complete",
     };
     return labels[status] || String(status || "Unknown").replaceAll("_", " ");
   }
@@ -715,11 +636,9 @@
 
   function blankHousehold() {
     return {
-      participants: [{ id: "member-1", name: "", weight: "1", splitwise_user_id: null }],
+      participants: [{ id: "member-1", name: "", weight: "1" }],
       service_owners: {},
       payer_participant_id: null,
-      splitwise_group_id: null,
-      output_destination: "local_summary",
     };
   }
 
@@ -750,16 +669,8 @@
     }
     const rows = state.household.participants.map((participant, index) => participantRow(participant, index));
     replace(refs["participant-list"], rows);
-    renderPayerOptions();
-    refs["group-id"].value = state.household.splitwise_group_id === null || state.household.splitwise_group_id === undefined
-      ? ""
-      : String(state.household.splitwise_group_id);
-    refs["output-destination"].value = state.household.output_destination || "local_summary";
     refs["household-save-state"].className = `save-state${state.householdSaved ? " is-saved" : " is-dirty"}`;
     setText(refs["household-save-state"], state.householdSaved ? "Saved locally" : "Unsaved changes");
-    if (state.splitwiseContext) {
-      renderSplitwiseContext();
-    }
   }
 
   function participantRow(participant, index) {
@@ -770,7 +681,6 @@
       on: {
         input: (event) => {
           state.household.participants[index].name = event.target.value;
-          updatePayerOptionLabels();
         },
       },
     });
@@ -797,17 +707,6 @@
       attrs: { min: "0.01", step: "0.01", inputmode: "decimal", required: "" },
       on: { input: (event) => { state.household.participants[index].weight = event.target.value; } },
     });
-    const splitwiseInput = node("input", {
-      className: "splitwise-input",
-      type: "number",
-      value: participant.splitwise_user_id === null || participant.splitwise_user_id === undefined ? "" : participant.splitwise_user_id,
-      attrs: { min: "1", step: "1", inputmode: "numeric", placeholder: "Optional until preview" },
-      on: {
-        input: (event) => {
-          state.household.participants[index].splitwise_user_id = event.target.value || null;
-        },
-      },
-    });
     const removeButton = node("button", {
       className: "remove-participant",
       type: "button",
@@ -820,7 +719,6 @@
       field("Name", nameInput),
       field("Stable ID", idInput, idLocked ? "Locked after first save." : "Lowercase slug; locks after save.", `participant-id-help-${index}`),
       field("Weight", weightInput),
-      field("Splitwise user ID", splitwiseInput, null, null, "splitwise-field"),
       removeButton,
     ]);
   }
@@ -845,7 +743,6 @@
         state.household.service_owners[service] = newId;
       }
     });
-    renderPayerOptions();
     renderCharges();
   }
 
@@ -863,7 +760,6 @@
       id: nextParticipantId(),
       name: "",
       weight: "1",
-      splitwise_user_id: null,
     });
     state.householdSaved = false;
     renderHousehold();
@@ -880,9 +776,6 @@
       return;
     }
     const removed = state.household.participants.splice(index, 1)[0];
-    if (state.household.payer_participant_id === removed.id) {
-      state.household.payer_participant_id = null;
-    }
     Object.keys(state.household.service_owners).forEach((service) => {
       if (state.household.service_owners[service] === removed.id) {
         delete state.household.service_owners[service];
@@ -892,33 +785,6 @@
     renderHousehold();
     renderCharges();
     updateWorkflow();
-  }
-
-  function renderPayerOptions() {
-    const current = state.household.payer_participant_id || "";
-    const options = [node("option", { value: "", text: "Choose a payer" })];
-    state.household.participants.forEach((participant) => {
-      const option = node("option", {
-        value: participant.id,
-        text: participant.name || participant.id || "Unnamed participant",
-      });
-      if (participant.id === current) {
-        option.selected = true;
-      }
-      options.push(option);
-    });
-    replace(refs["payer-select"], options);
-    refs["payer-select"].value = current;
-  }
-
-  function updatePayerOptionLabels() {
-    const options = Array.from(refs["payer-select"].options).slice(1);
-    options.forEach((option, index) => {
-      const participant = state.household.participants[index];
-      if (participant) {
-        setText(option, participant.name || participant.id || "Unnamed participant");
-      }
-    });
   }
 
   function markHouseholdDirty() {
@@ -931,154 +797,6 @@
     updateWorkflow();
   }
 
-  async function connectSplitwise() {
-    const token = refs["connect-token"].value;
-    if (!refs["connect-terms"].checked) {
-      refs["splitwise-connect-state"].className = "dialog-state is-error";
-      setText(refs["splitwise-connect-state"], "Accept the Splitwise API terms and privacy boundary before connecting.");
-      return;
-    }
-    busy(refs["connect-splitwise"], true, "Loading account…");
-    refs["splitwise-connect-state"].className = "dialog-state";
-    setText(refs["splitwise-connect-state"], "Requesting group and member IDs from Splitwise…");
-    refs["connect-token"].value = "";
-    try {
-      const payload = await api("/api/splitwise/context", {
-        method: "POST",
-        body: { access_token: token || null, accepted_destination_terms: true },
-      });
-      state.splitwiseToken = token || null;
-      state.splitwiseContext = payload;
-      refs["connect-terms"].checked = false;
-      refs["splitwise-connect-state"].className = "dialog-state difference-pass";
-      setText(refs["splitwise-connect-state"], "Account choices loaded. The token exists only in this tab's memory.");
-      renderSplitwiseContext();
-      toast("Splitwise account connected for this browser tab.");
-    } catch (error) {
-      state.splitwiseToken = null;
-      state.splitwiseContext = null;
-      refs["connect-token"].value = "";
-      refs["splitwise-connect-state"].className = "dialog-state is-error";
-      setText(refs["splitwise-connect-state"], error.message);
-      renderSplitwiseContext();
-    } finally {
-      busy(refs["connect-splitwise"], false);
-    }
-  }
-
-  function renderSplitwiseContext() {
-    const context = state.splitwiseContext;
-    const connected = Boolean(context);
-    refs["splitwise-context"].hidden = !connected;
-    refs["splitwise-connection-badge"].className = `save-state${connected ? " is-saved" : ""}`;
-    setText(refs["splitwise-connection-badge"], connected ? "Connected in memory" : "Not connected");
-    if (!connected) {
-      replace(refs["splitwise-group-choice"], []);
-      replace(refs["splitwise-member-mapping"], []);
-      return;
-    }
-    const currentUser = context.current_user || {};
-    setText(refs["splitwise-current-user"], `${currentUser.display_name || "Splitwise user"} · ID ${currentUser.user_id || "—"}`);
-    const groups = Array.isArray(context.groups) ? context.groups : [];
-    const choices = [node("option", { value: "", text: "Choose a Splitwise group" })];
-    groups.forEach((group) => {
-      const option = node("option", {
-        value: group.group_id,
-        text: `${group.name || "Unnamed group"} · ${group.members ? group.members.length : 0} members`,
-      });
-      if (state.household && String(state.household.splitwise_group_id) === String(group.group_id)) {
-        option.selected = true;
-      }
-      choices.push(option);
-    });
-    replace(refs["splitwise-group-choice"], choices);
-    if (!refs["splitwise-group-choice"].value && groups.length === 1) {
-      refs["splitwise-group-choice"].value = String(groups[0].group_id);
-    }
-    renderSplitwiseMemberMapping();
-  }
-
-  function selectedSplitwiseGroup() {
-    if (!state.splitwiseContext) {
-      return null;
-    }
-    const groupId = refs["splitwise-group-choice"].value;
-    return (state.splitwiseContext.groups || []).find((group) => String(group.group_id) === groupId) || null;
-  }
-
-  function renderSplitwiseMemberMapping() {
-    const group = selectedSplitwiseGroup();
-    const participants = state.household ? state.household.participants : [];
-    if (!group) {
-      replace(refs["splitwise-member-mapping"], [
-        node("div", { className: "notice is-neutral", text: "Choose a group to map household participants." }),
-      ]);
-      refs["apply-splitwise-context"].disabled = true;
-      return;
-    }
-    const members = Array.isArray(group.members) ? group.members : [];
-    const rows = participants.map((participant, index) => {
-      const select = node("select", {
-        dataset: { participantIndex: index },
-        attrs: { "aria-label": `Splitwise member for ${participant.name || participant.id}` },
-      });
-      select.append(node("option", { value: "", text: "Keep manual ID / not in group" }));
-      const exactName = String(participant.name || "").trim().toLocaleLowerCase();
-      members.forEach((member) => {
-        const option = node("option", {
-          value: member.user_id,
-          text: `${member.display_name || "Unnamed member"} · ID ${member.user_id}`,
-        });
-        const sameExistingId = participant.splitwise_user_id && String(participant.splitwise_user_id) === String(member.user_id);
-        const exactMatch = exactName && exactName === String(member.display_name || "").trim().toLocaleLowerCase();
-        option.selected = Boolean(sameExistingId || (!participant.splitwise_user_id && exactMatch));
-        select.append(option);
-      });
-      return node("div", { className: "member-map-row" }, [
-        node("div", {}, [
-          node("strong", { text: participant.name || "Unnamed participant" }),
-          node("small", { text: participant.id }),
-        ]),
-        select,
-      ]);
-    });
-    replace(refs["splitwise-member-mapping"], rows);
-    refs["apply-splitwise-context"].disabled = false;
-  }
-
-  function applySplitwiseContext() {
-    const group = selectedSplitwiseGroup();
-    if (!group || !state.household) {
-      return;
-    }
-    state.household.splitwise_group_id = Number(group.group_id);
-    refs["group-id"].value = String(group.group_id);
-    refs["splitwise-member-mapping"].querySelectorAll("select").forEach((select) => {
-      const index = Number(select.dataset.participantIndex);
-      const participant = state.household.participants[index];
-      if (participant && select.value) {
-        participant.splitwise_user_id = Number(select.value);
-      }
-    });
-    state.householdSaved = false;
-    renderHousehold();
-    refs["splitwise-connect"].open = true;
-    renderSplitwiseContext();
-    markHouseholdDirty();
-    toast("Selected Splitwise IDs filled into the household. Review and save them.");
-  }
-
-  function forgetSplitwise() {
-    state.splitwiseToken = null;
-    state.splitwiseContext = null;
-    refs["connect-token"].value = "";
-    refs["connect-terms"].checked = false;
-    refs["splitwise-connect-state"].className = "dialog-state";
-    setText(refs["splitwise-connect-state"], "Token forgotten. Saved numeric IDs remain in the household form.");
-    renderSplitwiseContext();
-    toast("In-memory Splitwise token forgotten.");
-  }
-
   function collectHousehold() {
     const participants = state.household.participants.map((participant, index) => {
       const row = refs["participant-list"].querySelector(`[data-participant-index="${index}"]`);
@@ -1086,7 +804,6 @@
       const name = inputs[0] ? inputs[0].value.trim() : String(participant.name || "").trim();
       const id = inputs[1] ? inputs[1].value.trim() : String(participant.id || "").trim();
       const weight = inputs[2] ? inputs[2].value.trim() : String(participant.weight || "").trim();
-      const splitwiseRaw = inputs[3] ? inputs[3].value.trim() : "";
       if (!name) {
         throw new Error(`Participant ${index + 1} needs a name.`);
       }
@@ -1096,14 +813,10 @@
       if (!/^(?:\d+)(?:\.\d+)?$/.test(weight) || Number(weight) <= 0) {
         throw new Error(`${name}'s weight must be a decimal greater than zero.`);
       }
-      if (splitwiseRaw && (!/^\d+$/.test(splitwiseRaw) || Number(splitwiseRaw) <= 0)) {
-        throw new Error(`${name}'s Splitwise user ID must be a positive whole number.`);
-      }
       return {
         id,
         name,
         weight,
-        splitwise_user_id: splitwiseRaw ? Number(splitwiseRaw) : null,
       };
     });
     const participantIds = participants.map((participant) => participant.id);
@@ -1122,17 +835,10 @@
         serviceOwners[select.dataset.serviceKey] = select.value;
       }
     });
-    const payer = refs["payer-select"].value || null;
-    const groupRaw = refs["group-id"].value.trim();
-    if (groupRaw && (!/^\d+$/.test(groupRaw) || Number(groupRaw) < 0)) {
-      throw new Error("Splitwise group ID must be a non-negative whole number.");
-    }
     return {
       participants,
       service_owners: serviceOwners,
-      payer_participant_id: payer,
-      splitwise_group_id: groupRaw ? Number(groupRaw) : null,
-      output_destination: refs["output-destination"].value === "splitwise" ? "splitwise" : "local_summary",
+      output_destination: "local_summary",
     };
   }
 
@@ -1341,8 +1047,8 @@
       setText(refs["processing-title"], "Reading and reconciling locally");
       setText(refs["processing-copy"], "Extracting text, requesting strict bill JSON, then checking every cent.");
     } else {
-      setText(refs["processing-title"], "Waiting for Splitwise");
-      setText(refs["processing-copy"], "Do not retry while the destination outcome is unknown.");
+      setText(refs["processing-title"], "Finishing the statement");
+      setText(refs["processing-copy"], "The local result is being saved.");
     }
     setText(refs["processing-run-id"], shortHash(run.id, 16));
   }
@@ -1456,7 +1162,7 @@
     ];
     refs["whatsapp-summary-text"].value = lines.join("\n");
     refs["copy-whatsapp-summary"].disabled = false;
-    setText(refs["whatsapp-summary-copy"], "Generated from the reviewed deterministic preview. It is not sent automatically.");
+    setText(refs["whatsapp-summary-copy"], "Copy this message and send it to your household chat.");
   }
 
   async function copyWhatsAppSummary() {
@@ -1489,11 +1195,11 @@
     const summary = node("div", { className: `gate-summary${blocked ? " is-blocked" : ""}` }, [
       node("span", { className: "gate-icon", text: blocked ? "!" : "✓", attrs: { "aria-hidden": "true" } }),
       node("div", {}, [
-        node("strong", { text: blocked ? "A safety gate is blocking external posting" : "Extraction gates are clear" }),
+        node("strong", { text: blocked ? "We need one correction before calculating shares" : "Statement checks passed" }),
         node("p", {
           text: blocked
-            ? "Correct the verified bill facts or destination settings, then rebuild the preview."
-            : "An explicit preview acknowledgement is still required before any destination call.",
+            ? "Correct the statement facts, then build the household split again."
+            : "You can now review each person’s amount and copy the message.",
         }),
       ]),
     ]);
@@ -1645,15 +1351,15 @@
     const hasParticipants = Boolean(state.household && state.household.participants.length);
     const canPreviewStatus = Boolean(state.activeRun && ["blocked", "needs_review", "ready"].includes(state.activeRun.status));
     if (!canPreviewStatus) {
-      setText(refs["ownership-state"], "This run is immutable because its destination outcome has already been recorded.");
+      setText(refs["ownership-state"], "This statement is already finished. Open a new statement to calculate another split.");
       refs["build-preview"].disabled = true;
     } else if (!unresolved.length && hasParticipants) {
-      setText(refs["ownership-state"], "Every line has an owner. Preview will allocate shared charges by the saved weights.");
+      setText(refs["ownership-state"], "Every line has an owner. Build the household split to see each amount.");
       refs["build-preview"].disabled = false;
     } else {
       setText(refs["ownership-state"], unresolved.length
         ? `${unresolved.length} ownership assignment${unresolved.length === 1 ? "" : "s"} remain.`
-        : "Add at least one household participant before previewing.");
+        : "Add at least one household participant before continuing.");
       refs["build-preview"].disabled = true;
     }
   }
@@ -1709,10 +1415,10 @@
       return;
     }
     if (unresolvedOwnership().length) {
-      toast("Assign every line-scoped service before previewing.", "error");
+      toast("Assign an owner to every line before continuing.", "error");
       return;
     }
-    busy(refs["build-preview"], true, "Building exact preview…");
+    busy(refs["build-preview"], true, "Calculating shares…");
     try {
       const household = await saveHousehold({ quiet: true });
       const payload = await api(`/api/runs/${encodeURIComponent(state.activeRun.id)}/preview`, {
@@ -1725,8 +1431,8 @@
       await verifyAudit();
       scrollToSection("preview-section");
       toast(state.activeRun.status === "ready"
-        ? "Deterministic preview is ready for your review."
-        : "Preview built with blockers; nothing can be posted.",
+        ? "Your household split is ready."
+        : "The split needs a correction before it can be calculated.",
       state.activeRun.status === "ready" ? "success" : "error");
     } catch (error) {
       showGlobal(error.message, "error");
@@ -1744,19 +1450,13 @@
       return;
     }
     const preview = run.preview;
-    const isLocalSummary = preview.destination === "local_summary";
     refs["preview-empty"].hidden = true;
     refs["preview-content"].hidden = false;
-    setText(refs["preview-description"], preview.description || "Splitwise expense");
+    setText(refs["preview-description"], preview.description || "Mobile bill split");
     setText(refs["preview-cost"], formatMoney(preview.cost, preview.currency_code));
-    setText(refs["preview-digest"], run.preview_digest || "—");
-    refs["preview-digest"].title = run.preview_digest || "";
-    const proofLabel = document.querySelector(".expense-proof .micro-label");
-    if (proofLabel) setText(proofLabel, isLocalSummary ? "WhatsApp / local summary" : "Splitwise dry run");
     const metadata = [
-      ["Destination", preview.destination || "splitwise"],
-      ["Expense date", formatDate(preview.date)],
-      ["Group", preview.group_id === null || preview.group_id === undefined ? "Not set" : String(preview.group_id)],
+      ["Billing date", formatDate(preview.date)],
+      ["People", String(Array.isArray(preview.shares) ? preview.shares.length : 0)],
     ];
     replace(refs["preview-meta"], metadata.map(([label, value]) => node("div", {}, [
       node("dt", { text: label }),
@@ -1766,11 +1466,7 @@
     replace(refs["preview-shares"], shares.map((share) => node("div", { className: "share-row" }, [
       node("div", {}, [
         node("strong", { text: share.participant_name || share.participant_id }),
-        node("small", {
-          text: share.paid_share && Number(share.paid_share) !== 0
-            ? `Paid ${formatMoney(share.paid_share, preview.currency_code)} · Splitwise ${share.splitwise_user_id || "missing"}`
-            : `Splitwise ${share.splitwise_user_id || "missing"}`,
-        }),
+        node("small", { text: "Share for this billing cycle" }),
       ]),
       node("code", { text: formatMoney(share.owed_share, preview.currency_code) }),
     ])));
@@ -1783,37 +1479,12 @@
       const list = node("ul");
       blockers.forEach((blocker) => list.append(node("li", { text: blocker })));
       replace(refs["preview-blockers"], [
-        node("strong", { text: "Destination blockers" }),
+        node("strong", { text: "Please review these items" }),
         list,
       ]);
     } else {
       replace(refs["preview-blockers"], []);
     }
-    const canPost = !isLocalSummary && run.status === "ready" && blockers.length === 0;
-    refs["open-confirmation"].disabled = !canPost;
-    setText(refs["open-confirmation"], isLocalSummary ? "Splitwise not connected" : "Review & confirm post");
-    if (run.status === "ready") {
-      setText(refs["approval-title"], isLocalSummary ? "Local result ready to share" : (canPost ? "Ready for your decision" : "Preview is blocked"));
-      setText(refs["approval-copy"], isLocalSummary
-        ? "Copy the WhatsApp summary above. Nothing is sent anywhere."
-        : (canPost ? "The preview is still local and has not been sent to Splitwise." : "Resolve every blocker and rebuild this preview."));
-    } else if (["posted", "posted_unverified"].includes(run.status)) {
-      setText(refs["approval-title"], "This preview was already posted");
-      setText(refs["approval-copy"], "Use the verified app-created record below if a rollback is needed.");
-    } else if (run.status === "ambiguous") {
-      setText(refs["approval-title"], "Do not retry this post");
-      setText(refs["approval-copy"], "Check Splitwise manually using the correlation ID before taking any action.");
-    } else if (run.status === "rollback_ambiguous") {
-      setText(refs["approval-title"], "Do not retry this rollback");
-      setText(refs["approval-copy"], "Check whether the recorded Splitwise expense still exists; the deletion result is unknown.");
-    } else if (run.status === "rolled_back") {
-      setText(refs["approval-title"], "Rollback recorded");
-      setText(refs["approval-copy"], "The app-created Splitwise expense was deleted; the local audit record remains.");
-    } else {
-      setText(refs["approval-title"], "External posting unavailable");
-      setText(refs["approval-copy"], statusLabel(run.status));
-    }
-    renderPostingOutcome();
     updateWorkflow();
   }
 
@@ -2239,7 +1910,7 @@
     if (!run) {
       setStep("statement", "Waiting", "pending");
       setStep("review", "No extraction", "pending");
-      setStep("preview", "No preview", "pending");
+      setStep("preview", "No result", "pending");
       return;
     }
     if (run.status === "failed" && !run.bill) {
@@ -2261,19 +1932,9 @@
     }
 
     if (!run.preview) {
-      setStep("preview", "No preview", "pending");
-    } else if (run.status === "posted") {
-      setStep("preview", "Posted & verified", "complete");
-    } else if (run.status === "posted_unverified") {
-      setStep("preview", "Verify manually", "blocked");
-    } else if (run.status === "ambiguous") {
-      setStep("preview", "Do not retry", "blocked");
-    } else if (run.status === "rollback_ambiguous") {
-      setStep("preview", "Rollback unknown", "blocked");
-    } else if (run.status === "rolled_back") {
-      setStep("preview", "Rolled back", "complete");
+      setStep("preview", "No result", "pending");
     } else if (run.status === "ready") {
-      setStep("preview", "Awaiting approval", "complete");
+      setStep("preview", "Ready to share", "complete");
     } else if (run.status === "blocked") {
       setStep("preview", "Blocked", "blocked");
     } else {

@@ -59,8 +59,8 @@
           <button class="rail-step" type="button" data-section="preview-section">
             <span class="rail-index">05</span>
             <span class="rail-copy">
-              <strong>Approve</strong>
-              <small data-step-state="preview">No preview</small>
+              <strong>Share</strong>
+              <small data-step-state="preview">No result</small>
             </span>
             <span class="rail-state" aria-hidden="true"></span>
           </button>
@@ -80,8 +80,8 @@
         <header id="top" class="workspace-header">
           <div>
             <p class="eyebrow">Private household accounting</p>
-            <h1>Every dollar needs a destination.</h1>
-            <p class="lede">A local model reads the statement. Deterministic rules do the math. You decide what leaves this machine.</p>
+            <h1>See exactly what everyone owes.</h1>
+            <p class="lede">A local model reads the statement, calculates each person’s share, and prepares a message you can copy.</p>
           </div>
           <div class="header-status" aria-label="System status">
             <div id="audit-chip" class="status-chip is-loading">
@@ -99,12 +99,12 @@
           <div class="start-here-copy">
             <p class="step-label">Start here</p>
             <h2 id="start-here-title">Three small steps to your first split</h2>
-            <p>Choose a local reader, name the people on the bill, then drop in this month’s statement. Nothing is posted until you review and confirm it.</p>
+            <p>Choose a local reader, name the people on the bill, then drop in this month’s statement.</p>
           </div>
           <ol class="start-here-steps">
             <li><strong>Choose a reader</strong><span>Run the fictional readiness check.</span></li>
-            <li><strong>Set the household</strong><span>Add names, weights, and payer.</span></li>
-            <li><strong>Review the result</strong><span>Upload, reconcile, then preview.</span></li>
+            <li><strong>Set the household</strong><span>Add names and weights.</span></li>
+            <li><strong>Copy the result</strong><span>Review each amount and copy the message.</span></li>
           </ol>
         </section>
 
@@ -147,7 +147,7 @@
             <div>
               <p class="step-label">Step 02 · allocation rules</p>
               <h2 id="household-title">Name the people behind the lines</h2>
-              <p>Account-wide charges follow weights. Line charges go only to the owner you choose.</p>
+              <p>Account charges follow weights. Line charges go only to the person you choose.</p>
             </div>
             <span id="household-save-state" class="save-state">Not saved</span>
           </div>
@@ -156,81 +156,13 @@
             <div class="form-block-header">
               <div>
                 <h3>Participants</h3>
-                <p>IDs become stable ledger keys after saving. Splitwise IDs are only needed for people who owe a share.</p>
+                <p>Add everyone who shares the bill. You can adjust weights for shared charges.</p>
               </div>
               <button id="add-participant" class="secondary-button" type="button">Add person</button>
             </div>
             <div id="participant-list" class="participant-list"></div>
 
-            <details id="splitwise-connect" class="splitwise-connect">
-              <summary>
-                <span>
-                  <strong>Connect Splitwise to fill IDs</strong>
-                  <small>Optional · manual ID entry remains available</small>
-                </span>
-                <span id="splitwise-connection-badge" class="save-state">Not connected</span>
-              </summary>
-              <div class="connect-body">
-                <p>Connect once to let WaySplit find your account, group, and household members. You do not need to type numeric IDs.</p>
-                <ol class="splitwise-steps">
-                  <li>Open <a href="https://secure.splitwise.com/apps" target="_blank" rel="noopener noreferrer">Splitwise developer apps</a> and sign in.</li>
-                  <li>Open your app, copy its personal API key, then return here.</li>
-                  <li>Paste the key below. WaySplit uses it only in this tab to load your choices.</li>
-                </ol>
-                <div id="splitwise-connect-form" class="connect-form">
-                  <label class="field" for="connect-token">
-                    <span>Splitwise personal API key</span>
-                    <input id="connect-token" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your personal API key">
-                    <small>This key is never written to WaySplit’s database, browser storage, or audit log.</small>
-                  </label>
-                  <label class="check-field connect-terms">
-                    <input id="connect-terms" type="checkbox" required>
-                    <span>I accept the <a href="https://dev.splitwise.com/" target="_blank" rel="noopener noreferrer">Splitwise API terms</a>, understand <a href="/privacy" target="_blank" rel="noopener noreferrer">WaySplit’s local privacy policy</a>, and have obtained explicit consent from every affected Splitwise user.</span>
-                  </label>
-                  <button id="connect-splitwise" class="secondary-button" type="button">Find my account and members</button>
-                </div>
-                <div id="splitwise-connect-state" class="dialog-state" role="status" aria-live="polite"></div>
-                <div id="splitwise-context" class="splitwise-context" hidden>
-                  <div class="context-heading">
-                    <div>
-                      <p class="micro-label">Connected for this tab</p>
-                      <strong id="splitwise-current-user">—</strong>
-                    </div>
-                    <button id="forget-splitwise" class="quiet-button" type="button">Forget token</button>
-                  </div>
-                  <label class="field" for="splitwise-group-choice">
-                    <span>Choose a group</span>
-                    <select id="splitwise-group-choice"></select>
-                  </label>
-                  <div id="splitwise-member-mapping" class="member-mapping"></div>
-                  <div class="context-actions">
-                    <p>Applying fills the manual fields above; review them before saving.</p>
-                    <button id="apply-splitwise-context" class="primary-button" type="button">Apply selected IDs</button>
-                  </div>
-                </div>
-              </div>
-            </details>
-
             <div class="household-footer">
-              <label class="field" for="output-destination">
-                <span>How will you use the result?</span>
-                <select id="output-destination" name="output_destination">
-                  <option value="local_summary">WhatsApp / local summary (recommended)</option>
-                  <option value="splitwise">Splitwise expense (optional)</option>
-                </select>
-                <small>Local summary needs no Splitwise account or API key. Choose Splitwise only when you are ready to connect it.</small>
-              </label>
-              <label class="field">
-                <span>Who paid the statement?</span>
-                <select id="payer-select" name="payer_participant_id">
-                  <option value="">Choose a payer</option>
-                </select>
-              </label>
-              <label class="field">
-                <span>Splitwise group ID <small>(filled automatically after connection)</small></span>
-                <input id="group-id" name="splitwise_group_id" type="number" min="0" step="1" inputmode="numeric" placeholder="0 for no group">
-                <small>Leave blank if you connected Splitwise above.</small>
-              </label>
               <button id="save-household" class="primary-button" type="submit">Save household</button>
             </div>
           </form>
@@ -275,7 +207,7 @@
             <div>
               <p class="step-label">Step 04 · extraction &amp; reconciliation</p>
               <h2 id="review-title">Read the ledger before you split it</h2>
-              <p>Model output stays editable. Posting remains blocked until both equations reconcile and every safety gate passes.</p>
+              <p>Review the extracted facts, then calculate each person’s share.</p>
             </div>
             <div id="run-status-chip" class="status-chip is-idle">
               <span class="status-dot" aria-hidden="true"></span>
@@ -309,7 +241,7 @@
                 <div>
                   <p class="micro-label">Ready to share</p>
                   <h3 id="whatsapp-summary-title">WhatsApp bill summary</h3>
-                  <p id="whatsapp-summary-copy" class="muted">Build a passing preview to create the exact message.</p>
+                  <p id="whatsapp-summary-copy" class="muted">Your message will appear here after the split is calculated.</p>
                 </div>
                 <button id="copy-whatsapp-summary" class="quiet-button" type="button" disabled>Copy message</button>
               </div>
@@ -343,7 +275,7 @@
 
             <details id="json-editor" class="json-editor">
               <summary>Normalized Bill JSON · expert correction</summary>
-              <p>Edit only facts you can verify against the statement. Saving reruns deterministic reconciliation and invalidates any previous preview.</p>
+              <p>Edit only facts you can verify against the statement. Saving checks the bill again.</p>
               <label class="field" for="bill-json">
                 <span>Versioned normalized bill</span>
                 <textarea id="bill-json" rows="24" spellcheck="false" autocomplete="off"></textarea>
@@ -355,8 +287,8 @@
             </details>
 
             <div class="review-actions">
-              <p id="ownership-state">Assign an owner to every line identifier before previewing.</p>
-              <button id="build-preview" class="primary-button" type="button">Save owners &amp; build preview</button>
+              <p id="ownership-state">Assign an owner to every line before calculating shares.</p>
+              <button id="build-preview" class="primary-button" type="button">Calculate household shares</button>
             </div>
           </div>
         </section>
@@ -364,34 +296,29 @@
         <section id="preview-section" class="workflow-section" aria-labelledby="preview-title">
           <div class="section-heading">
             <div>
-              <p class="step-label">Step 05 · dry run &amp; approval</p>
-              <h2 id="preview-title">Approve the exact expense plan</h2>
-              <p>This is the deterministic Splitwise expense. Nothing is posted until you confirm this digest; the adapter adds only a non-financial WaySplit reference.</p>
+              <p class="step-label">Step 05 · your result</p>
+              <h2 id="preview-title">Your household split</h2>
+              <p>These are the final amounts for this billing cycle. Copy the WhatsApp message above to share them.</p>
             </div>
           </div>
 
           <div id="preview-empty" class="empty-state is-compact">
             <span class="empty-glyph" aria-hidden="true">◎</span>
-            <h3>No preview yet</h3>
-            <p>Review the extraction and assign every line before building a dry run.</p>
+            <h3>No result yet</h3>
+            <p>Review the extraction and assign every line before building your split.</p>
           </div>
 
           <div id="preview-content" hidden>
-            <div id="posting-outcome" class="posting-outcome" hidden></div>
             <div class="preview-layout">
               <div class="expense-proof">
                 <div class="proof-heading">
                   <div>
-                    <p class="micro-label">Splitwise dry run</p>
+                    <p class="micro-label">Billing cycle total</p>
                     <h3 id="preview-description">—</h3>
                   </div>
                   <strong id="preview-cost" class="proof-total">—</strong>
                 </div>
                 <dl id="preview-meta" class="preview-meta"></dl>
-                <div class="digest-row">
-                  <span>Preview digest</span>
-                  <code id="preview-digest">—</code>
-                </div>
               </div>
               <div class="share-proof">
                 <div class="share-heading">
@@ -402,13 +329,6 @@
               </div>
             </div>
             <div id="preview-blockers" class="preview-blockers" hidden></div>
-            <div class="approval-bar">
-              <div>
-                <strong id="approval-title">Ready for your decision</strong>
-                <p id="approval-copy">The preview is still local and has not been sent to Splitwise.</p>
-              </div>
-              <button id="open-confirmation" class="signal-button" type="button">Review &amp; confirm post</button>
-            </div>
           </div>
         </section>
 
@@ -445,70 +365,10 @@
 
         <footer class="app-footer">
           <span>Local-first by design</span>
-          <span>Model extraction · deterministic allocation · explicit posting</span>
+          <span>Local extraction · clear household amounts · copy-ready message</span>
         </footer>
       </main>
     </div>
-
-    <dialog id="confirmation-dialog" class="action-dialog" aria-labelledby="confirmation-title">
-      <form id="confirmation-form" method="dialog">
-        <div class="dialog-topline">
-          <span class="dialog-kicker">External side effect</span>
-          <button class="icon-button" type="button" data-close-dialog="confirmation-dialog" aria-label="Close confirmation">×</button>
-        </div>
-        <h2 id="confirmation-title">Post this exact expense?</h2>
-        <p>WaySplit will send only the exact JSON payload below to Splitwise. It includes the group, date, currency, notes, payer, member IDs, and every paid/owed share. The one-time approval expires and cannot be reused after the plan changes.</p>
-        <div id="confirmation-summary" class="confirmation-summary"></div>
-        <label class="check-field">
-          <input id="ack-preview" type="checkbox" required>
-          <span>I checked the statement, allocations, and exact preview total.</span>
-        </label>
-        <label class="check-field">
-          <input id="accept-terms" type="checkbox" required>
-          <span>I accept the <a href="https://dev.splitwise.com/" target="_blank" rel="noopener noreferrer">Splitwise API terms</a> for this post and confirm every affected Splitwise user has explicitly consented to this processing.</span>
-        </label>
-        <label class="field token-field" for="splitwise-token">
-          <span>Splitwise access token</span>
-          <input id="splitwise-token" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a Splitwise token">
-          <small>Used for this request only. The browser does not save it.</small>
-        </label>
-        <div id="confirmation-state" class="dialog-state" role="status" aria-live="polite"></div>
-        <div class="dialog-actions">
-          <button class="secondary-button" type="button" data-close-dialog="confirmation-dialog">Keep it local</button>
-          <button id="confirm-post" class="signal-button" type="submit">Post approved plan</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="rollback-dialog" class="action-dialog is-danger" aria-labelledby="rollback-title">
-      <form id="rollback-form" method="dialog">
-        <div class="dialog-topline">
-          <span class="dialog-kicker">Destructive destination action</span>
-          <button class="icon-button" type="button" data-close-dialog="rollback-dialog" aria-label="Close rollback">×</button>
-        </div>
-        <h2 id="rollback-title">Delete the app-created expense?</h2>
-        <p>This removes only the exact Splitwise expense shown below. WaySplit verifies it still matches before deletion, reserves the attempt, and freezes retries if the result is unknown.</p>
-        <div id="rollback-summary" class="confirmation-summary"></div>
-        <label class="check-field">
-          <input id="ack-rollback-target" type="checkbox" required>
-          <span>I checked the expense ID, group, amount, payer, and every member share shown above.</span>
-        </label>
-        <label class="field" for="rollback-phrase">
-          <span>Type DELETE to confirm</span>
-          <input id="rollback-phrase" type="text" autocomplete="off" spellcheck="false" placeholder="DELETE" required>
-        </label>
-        <label class="field token-field" for="rollback-token">
-          <span>Splitwise access token</span>
-          <input id="rollback-token" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a Splitwise token">
-          <small>Used for this rollback only. The browser does not save it.</small>
-        </label>
-        <div id="rollback-state" class="dialog-state" role="status" aria-live="polite"></div>
-        <div class="dialog-actions">
-          <button class="secondary-button" type="button" data-close-dialog="rollback-dialog">Cancel</button>
-          <button id="confirm-rollback" class="danger-button" type="submit" disabled>Delete from Splitwise</button>
-        </div>
-      </form>
-    </dialog>
 
     <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
   </body>
