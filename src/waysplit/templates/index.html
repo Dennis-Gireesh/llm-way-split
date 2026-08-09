@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <meta name="application-version" content="{{ version }}">
+    <title>WaySplit — local mobile bill splitting</title>
+    <link rel="stylesheet" href="/static/app.css">
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#workspace">Skip to workspace</a>
+
+    <div class="app-shell">
+      <aside class="workflow-rail" aria-label="WaySplit workflow">
+        <a class="brand" href="#top" aria-label="WaySplit home">
+          <span class="brand-mark" aria-hidden="true">W/</span>
+          <span>
+            <strong>WaySplit</strong>
+            <small>Local bill ledger</small>
+          </span>
+        </a>
+
+        <nav class="workflow-nav" aria-label="Workflow steps">
+          <button class="rail-step is-active" type="button" data-section="models-section">
+            <span class="rail-index">01</span>
+            <span class="rail-copy">
+              <strong>Local reader</strong>
+              <small data-step-state="model">Discovering</small>
+            </span>
+            <span class="rail-state" aria-hidden="true"></span>
+          </button>
+          <button class="rail-step" type="button" data-section="household-section">
+            <span class="rail-index">02</span>
+            <span class="rail-copy">
+              <strong>Household</strong>
+              <small data-step-state="household">Not saved</small>
+            </span>
+            <span class="rail-state" aria-hidden="true"></span>
+          </button>
+          <button class="rail-step" type="button" data-section="upload-section">
+            <span class="rail-index">03</span>
+            <span class="rail-copy">
+              <strong>Statement</strong>
+              <small data-step-state="statement">Waiting</small>
+            </span>
+            <span class="rail-state" aria-hidden="true"></span>
+          </button>
+          <button class="rail-step" type="button" data-section="review-section">
+            <span class="rail-index">04</span>
+            <span class="rail-copy">
+              <strong>Reconcile</strong>
+              <small data-step-state="review">No extraction</small>
+            </span>
+            <span class="rail-state" aria-hidden="true"></span>
+          </button>
+          <button class="rail-step" type="button" data-section="preview-section">
+            <span class="rail-index">05</span>
+            <span class="rail-copy">
+              <strong>Approve</strong>
+              <small data-step-state="preview">No preview</small>
+            </span>
+            <span class="rail-state" aria-hidden="true"></span>
+          </button>
+        </nav>
+
+        <div class="rail-trust">
+          <span class="trust-dot" aria-hidden="true"></span>
+          <div>
+            <strong id="rail-trust-title">Local by default</strong>
+            <small id="rail-trust-copy">Statements stay on this machine.</small>
+          </div>
+        </div>
+        <p class="version-line">WaySplit <span id="app-version">{{ version }}</span></p>
+      </aside>
+
+      <main id="workspace" class="workspace" tabindex="-1">
+        <header id="top" class="workspace-header">
+          <div>
+            <p class="eyebrow">Private household accounting</p>
+            <h1>Every dollar needs a destination.</h1>
+            <p class="lede">A local model reads the statement. Deterministic rules do the math. You decide what leaves this machine.</p>
+          </div>
+          <div class="header-status" aria-label="System status">
+            <div id="audit-chip" class="status-chip is-loading">
+              <span class="status-dot" aria-hidden="true"></span>
+              <span>Checking audit chain</span>
+            </div>
+            <button id="history-shortcut" class="quiet-button" type="button">Run history</button>
+          </div>
+        </header>
+
+        <div id="global-message" class="global-message" role="status" aria-live="polite" hidden></div>
+
+        <section id="models-section" class="workflow-section" aria-labelledby="models-title">
+          <div class="section-heading">
+            <div>
+              <p class="step-label">Step 01 · statement reader</p>
+              <h2 id="models-title">Choose a model already running here</h2>
+              <p>WaySplit checks common local endpoints automatically. The readiness test uses a synthetic statement—never your document.</p>
+            </div>
+            <button id="rescan-models" class="secondary-button" type="button">Scan again</button>
+          </div>
+
+          <div id="model-discovery-state" class="notice is-neutral" role="status">
+            <span class="mini-spinner" aria-hidden="true"></span>
+            <span>Looking for Ollama and OpenAI-compatible models…</span>
+          </div>
+          <div id="model-list" class="model-grid" aria-live="polite"></div>
+          <div id="model-empty" class="empty-state" hidden>
+            <span class="empty-glyph" aria-hidden="true">⌁</span>
+            <h3>No local model answered</h3>
+            <p>Start Ollama or another configured OpenAI-compatible server, then scan again. WaySplit never falls back to a cloud model.</p>
+          </div>
+
+          <div id="probe-panel" class="probe-panel" hidden>
+            <div>
+              <p class="micro-label">Selected reader</p>
+              <strong id="selected-model-name">—</strong>
+              <p id="selected-model-meta" class="muted">—</p>
+            </div>
+            <div class="probe-actions">
+              <div id="probe-result" class="probe-result" aria-live="polite"></div>
+              <button id="probe-model" class="primary-button" type="button">Run readiness test</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="household-section" class="workflow-section" aria-labelledby="household-title">
+          <div class="section-heading">
+            <div>
+              <p class="step-label">Step 02 · allocation rules</p>
+              <h2 id="household-title">Name the people behind the lines</h2>
+              <p>Account-wide charges follow weights. Line charges go only to the owner you choose.</p>
+            </div>
+            <span id="household-save-state" class="save-state">Not saved</span>
+          </div>
+
+          <form id="household-form" novalidate>
+            <div class="form-block-header">
+              <div>
+                <h3>Participants</h3>
+                <p>IDs become stable ledger keys after saving. Splitwise IDs are only needed for people who owe a share.</p>
+              </div>
+              <button id="add-participant" class="secondary-button" type="button">Add person</button>
+            </div>
+            <div id="participant-list" class="participant-list"></div>
+
+            <details id="splitwise-connect" class="splitwise-connect">
+              <summary>
+                <span>
+                  <strong>Connect Splitwise to fill IDs</strong>
+                  <small>Optional · manual ID entry remains available</small>
+                </span>
+                <span id="splitwise-connection-badge" class="save-state">Not connected</span>
+              </summary>
+              <div class="connect-body">
+                <p>WaySplit can fetch your account, groups, and member IDs once. The token stays only in this browser tab’s memory and is reused for an approved post or rollback.</p>
+                <div id="splitwise-connect-form" class="connect-form">
+                  <label class="field" for="connect-token">
+                    <span>Splitwise access token</span>
+                    <input id="connect-token" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a Splitwise token">
+                    <small>A pasted token is never written to WaySplit’s database, browser storage, or audit log.</small>
+                  </label>
+                  <label class="check-field connect-terms">
+                    <input id="connect-terms" type="checkbox" required>
+                    <span>I accept the <a href="https://dev.splitwise.com/" target="_blank" rel="noopener noreferrer">Splitwise API terms</a>, understand <a href="/privacy" target="_blank" rel="noopener noreferrer">WaySplit’s local privacy policy</a>, and have obtained explicit consent from every affected Splitwise user.</span>
+                  </label>
+                  <button id="connect-splitwise" class="secondary-button" type="button">Connect account</button>
+                </div>
+                <div id="splitwise-connect-state" class="dialog-state" role="status" aria-live="polite"></div>
+                <div id="splitwise-context" class="splitwise-context" hidden>
+                  <div class="context-heading">
+                    <div>
+                      <p class="micro-label">Connected for this tab</p>
+                      <strong id="splitwise-current-user">—</strong>
+                    </div>
+                    <button id="forget-splitwise" class="quiet-button" type="button">Forget token</button>
+                  </div>
+                  <label class="field" for="splitwise-group-choice">
+                    <span>Choose a group</span>
+                    <select id="splitwise-group-choice"></select>
+                  </label>
+                  <div id="splitwise-member-mapping" class="member-mapping"></div>
+                  <div class="context-actions">
+                    <p>Applying fills the manual fields above; review them before saving.</p>
+                    <button id="apply-splitwise-context" class="primary-button" type="button">Apply selected IDs</button>
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <div class="household-footer">
+              <label class="field">
+                <span>Who paid the statement?</span>
+                <select id="payer-select" name="payer_participant_id">
+                  <option value="">Choose a payer</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Splitwise group ID</span>
+                <input id="group-id" name="splitwise_group_id" type="number" min="0" step="1" inputmode="numeric" placeholder="0 for no group">
+                <small>Leave blank until you are ready to preview.</small>
+              </label>
+              <button id="save-household" class="primary-button" type="submit">Save household</button>
+            </div>
+          </form>
+        </section>
+
+        <section id="upload-section" class="workflow-section" aria-labelledby="upload-title">
+          <div class="section-heading">
+            <div>
+              <p class="step-label">Step 03 · private ingestion</p>
+              <h2 id="upload-title">Bring in this month’s statement</h2>
+              <p>The source is fingerprinted for duplicate protection, processed locally, and removed after extraction by default.</p>
+            </div>
+            <div id="upload-model-chip" class="model-chip is-locked">Choose a ready model first</div>
+          </div>
+
+          <form id="upload-form" enctype="multipart/form-data">
+            <label id="drop-zone" class="drop-zone" for="statement-input">
+              <input id="statement-input" name="statement" type="file" accept="application/pdf,image/png,image/jpeg,image/tiff,image/webp" required>
+              <span class="drop-icon" aria-hidden="true">↓</span>
+              <span class="drop-primary">Drop a PDF or image here</span>
+              <span class="drop-secondary">or choose a statement from this machine</span>
+              <span id="selected-file" class="selected-file">No file selected</span>
+            </label>
+            <div class="upload-footer">
+              <p><strong>No cloud fallback.</strong> If the selected local model fails, the run stops safely.</p>
+              <button id="start-run" class="primary-button" type="submit" disabled>Extract statement</button>
+            </div>
+          </form>
+
+          <div id="processing-strip" class="processing-strip" hidden aria-live="polite">
+            <div class="processing-visual" aria-hidden="true"><span></span></div>
+            <div>
+              <strong id="processing-title">Reading the statement</strong>
+              <p id="processing-copy">Extracting text, asking the local model, then checking every total.</p>
+            </div>
+            <code id="processing-run-id"></code>
+          </div>
+        </section>
+
+        <section id="review-section" class="workflow-section" aria-labelledby="review-title">
+          <div class="section-heading">
+            <div>
+              <p class="step-label">Step 04 · extraction &amp; reconciliation</p>
+              <h2 id="review-title">Read the ledger before you split it</h2>
+              <p>Model output stays editable. Posting remains blocked until both equations reconcile and every safety gate passes.</p>
+            </div>
+            <div id="run-status-chip" class="status-chip is-idle">
+              <span class="status-dot" aria-hidden="true"></span>
+              <span>No active run</span>
+            </div>
+          </div>
+
+          <div id="review-empty" class="empty-state is-compact">
+            <span class="empty-glyph" aria-hidden="true">∑</span>
+            <h3>No extracted statement yet</h3>
+            <p>Select a ready local model and upload a statement to begin.</p>
+          </div>
+
+          <div id="review-content" hidden>
+            <div id="statement-meta" class="statement-meta"></div>
+
+            <div class="reconciliation-board" aria-labelledby="reconciliation-title">
+              <div class="board-heading">
+                <div>
+                  <p class="micro-label">Live reconciliation ledger</p>
+                  <h3 id="reconciliation-title">The statement equation</h3>
+                </div>
+                <div id="reconciliation-verdict" class="verdict"></div>
+              </div>
+              <div id="balance-equation" class="balance-equation"></div>
+              <div id="line-equation" class="line-equation"></div>
+            </div>
+
+            <div id="gate-panel" class="gate-panel"></div>
+
+            <div class="charges-header">
+              <div>
+                <h3>Itemized charges</h3>
+                <p id="charge-count" class="muted"></p>
+              </div>
+              <button id="open-json-editor" class="quiet-button" type="button">Expert JSON correction</button>
+            </div>
+            <div class="table-wrap">
+              <table class="charge-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Charge</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Evidence</th>
+                    <th scope="col">Confidence</th>
+                    <th scope="col">Owner / rule</th>
+                    <th scope="col" class="number-cell">Amount</th>
+                  </tr>
+                </thead>
+                <tbody id="charge-rows"></tbody>
+              </table>
+            </div>
+
+            <details id="json-editor" class="json-editor">
+              <summary>Normalized Bill JSON · expert correction</summary>
+              <p>Edit only facts you can verify against the statement. Saving reruns deterministic reconciliation and invalidates any previous preview.</p>
+              <label class="field" for="bill-json">
+                <span>Versioned normalized bill</span>
+                <textarea id="bill-json" rows="24" spellcheck="false" autocomplete="off"></textarea>
+              </label>
+              <div class="editor-footer">
+                <p id="json-editor-state" class="muted" aria-live="polite">Strict schema validation applies.</p>
+                <button id="save-bill-json" class="primary-button" type="button">Validate &amp; save correction</button>
+              </div>
+            </details>
+
+            <div class="review-actions">
+              <p id="ownership-state">Assign an owner to every line identifier before previewing.</p>
+              <button id="build-preview" class="primary-button" type="button">Save owners &amp; build preview</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="preview-section" class="workflow-section" aria-labelledby="preview-title">
+          <div class="section-heading">
+            <div>
+              <p class="step-label">Step 05 · dry run &amp; approval</p>
+              <h2 id="preview-title">Approve the exact expense plan</h2>
+              <p>This is the deterministic Splitwise expense. Nothing is posted until you confirm this digest; the adapter adds only a non-financial WaySplit reference.</p>
+            </div>
+          </div>
+
+          <div id="preview-empty" class="empty-state is-compact">
+            <span class="empty-glyph" aria-hidden="true">◎</span>
+            <h3>No preview yet</h3>
+            <p>Review the extraction and assign every line before building a dry run.</p>
+          </div>
+
+          <div id="preview-content" hidden>
+            <div id="posting-outcome" class="posting-outcome" hidden></div>
+            <div class="preview-layout">
+              <div class="expense-proof">
+                <div class="proof-heading">
+                  <div>
+                    <p class="micro-label">Splitwise dry run</p>
+                    <h3 id="preview-description">—</h3>
+                  </div>
+                  <strong id="preview-cost" class="proof-total">—</strong>
+                </div>
+                <dl id="preview-meta" class="preview-meta"></dl>
+                <div class="digest-row">
+                  <span>Preview digest</span>
+                  <code id="preview-digest">—</code>
+                </div>
+              </div>
+              <div class="share-proof">
+                <div class="share-heading">
+                  <h3>Participant shares</h3>
+                  <span>Exact to the cent</span>
+                </div>
+                <div id="preview-shares" class="preview-shares"></div>
+              </div>
+            </div>
+            <div id="preview-blockers" class="preview-blockers" hidden></div>
+            <div class="approval-bar">
+              <div>
+                <strong id="approval-title">Ready for your decision</strong>
+                <p id="approval-copy">The preview is still local and has not been sent to Splitwise.</p>
+              </div>
+              <button id="open-confirmation" class="signal-button" type="button">Review &amp; confirm post</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="history-section" class="workflow-section history-section" aria-labelledby="history-title">
+          <div class="section-heading">
+            <div>
+              <p class="step-label">Local record</p>
+              <h2 id="history-title">Runs &amp; audit chain</h2>
+              <p>Statement fingerprints prevent duplicates. The tamper-evident audit hash chain makes local workflow changes detectable.</p>
+            </div>
+            <button id="refresh-history" class="secondary-button" type="button">Refresh</button>
+          </div>
+          <div class="history-layout">
+            <div>
+              <div class="subsection-heading">
+                <h3>Recent runs</h3>
+                <span id="history-count">0 runs</span>
+              </div>
+              <div id="run-history" class="run-history"></div>
+              <div id="history-empty" class="empty-state is-compact">
+                <p>Your first processed statement will appear here.</p>
+              </div>
+            </div>
+            <aside id="audit-card" class="audit-card" aria-label="Audit chain verification">
+              <div class="audit-seal" aria-hidden="true">#</div>
+              <p class="micro-label">Tamper-evident audit</p>
+              <h3 id="audit-title">Verifying chain…</h3>
+              <p id="audit-copy">Checking every local ledger link.</p>
+              <dl id="audit-details"></dl>
+              <button id="verify-audit" class="quiet-button" type="button">Verify again</button>
+            </aside>
+          </div>
+        </section>
+
+        <footer class="app-footer">
+          <span>Local-first by design</span>
+          <span>Model extraction · deterministic allocation · explicit posting</span>
+        </footer>
+      </main>
+    </div>
+
+    <dialog id="confirmation-dialog" class="action-dialog" aria-labelledby="confirmation-title">
+      <form id="confirmation-form" method="dialog">
+        <div class="dialog-topline">
+          <span class="dialog-kicker">External side effect</span>
+          <button class="icon-button" type="button" data-close-dialog="confirmation-dialog" aria-label="Close confirmation">×</button>
+        </div>
+        <h2 id="confirmation-title">Post this exact expense?</h2>
+        <p>WaySplit will send only the exact JSON payload below to Splitwise. It includes the group, date, currency, notes, payer, member IDs, and every paid/owed share. The one-time approval expires and cannot be reused after the plan changes.</p>
+        <div id="confirmation-summary" class="confirmation-summary"></div>
+        <label class="check-field">
+          <input id="ack-preview" type="checkbox" required>
+          <span>I checked the statement, allocations, and exact preview total.</span>
+        </label>
+        <label class="check-field">
+          <input id="accept-terms" type="checkbox" required>
+          <span>I accept the <a href="https://dev.splitwise.com/" target="_blank" rel="noopener noreferrer">Splitwise API terms</a> for this post and confirm every affected Splitwise user has explicitly consented to this processing.</span>
+        </label>
+        <label class="field token-field" for="splitwise-token">
+          <span>Splitwise access token</span>
+          <input id="splitwise-token" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a Splitwise token">
+          <small>Used for this request only. The browser does not save it.</small>
+        </label>
+        <div id="confirmation-state" class="dialog-state" role="status" aria-live="polite"></div>
+        <div class="dialog-actions">
+          <button class="secondary-button" type="button" data-close-dialog="confirmation-dialog">Keep it local</button>
+          <button id="confirm-post" class="signal-button" type="submit">Post approved plan</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="rollback-dialog" class="action-dialog is-danger" aria-labelledby="rollback-title">
+      <form id="rollback-form" method="dialog">
+        <div class="dialog-topline">
+          <span class="dialog-kicker">Destructive destination action</span>
+          <button class="icon-button" type="button" data-close-dialog="rollback-dialog" aria-label="Close rollback">×</button>
+        </div>
+        <h2 id="rollback-title">Delete the app-created expense?</h2>
+        <p>This removes only the exact Splitwise expense shown below. WaySplit verifies it still matches before deletion, reserves the attempt, and freezes retries if the result is unknown.</p>
+        <div id="rollback-summary" class="confirmation-summary"></div>
+        <label class="check-field">
+          <input id="ack-rollback-target" type="checkbox" required>
+          <span>I checked the expense ID, group, amount, payer, and every member share shown above.</span>
+        </label>
+        <label class="field" for="rollback-phrase">
+          <span>Type DELETE to confirm</span>
+          <input id="rollback-phrase" type="text" autocomplete="off" spellcheck="false" placeholder="DELETE" required>
+        </label>
+        <label class="field token-field" for="rollback-token">
+          <span>Splitwise access token</span>
+          <input id="rollback-token" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a Splitwise token">
+          <small>Used for this rollback only. The browser does not save it.</small>
+        </label>
+        <div id="rollback-state" class="dialog-state" role="status" aria-live="polite"></div>
+        <div class="dialog-actions">
+          <button class="secondary-button" type="button" data-close-dialog="rollback-dialog">Cancel</button>
+          <button id="confirm-rollback" class="danger-button" type="submit" disabled>Delete from Splitwise</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+  </body>
+</html>

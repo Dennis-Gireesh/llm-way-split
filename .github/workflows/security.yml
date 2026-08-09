@@ -1,0 +1,177 @@
+name: Security
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  schedule:
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  codeql:
+    name: CodeQL (Python)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          languages: python
+          build-mode: none
+      - name: Analyze
+        uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          category: /language:python
+
+  source-scan:
+    name: Dependency, secret, and configuration scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Create filesystem scan report
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.73.0
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          format: json
+          output: trivy-fs.json
+          exit-code: "0"
+      - name: Enforce every filesystem high and critical finding
+        id: fs_gate
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          skip-setup-trivy: true
+          cache: false
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          format: table
+          exit-code: "1"
+      - name: Upload source security evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: security-source-${{ github.sha }}
+          path: trivy-fs.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Fail a blocked source scan after preserving evidence
+        if: always() && steps.fs_gate.outcome == 'failure'
+        run: exit 1
+
+  container-scan:
+    name: Container scan and SBOM (${{ matrix.platform }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            id: amd64
+          - platform: linux/arm64
+            id: arm64
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - name: Build the platform image under test
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          load: true
+          platforms: ${{ matrix.platform }}
+          tags: waysplit:security-${{ matrix.id }}
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=security-${{ matrix.id }}
+          cache-to: type=gha,mode=max,scope=security-${{ matrix.id }}
+      - name: Create container scan report
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.73.0
+          scan-type: image
+          scan-ref: waysplit:security-${{ matrix.id }}
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          format: json
+          output: trivy-image-linux-${{ matrix.id }}.json
+          exit-code: "0"
+      - name: Enforce every container high and critical finding
+        id: image_gate
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          skip-setup-trivy: true
+          cache: false
+          scan-type: image
+          scan-ref: waysplit:security-${{ matrix.id }}
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          format: table
+          exit-code: "1"
+      - name: Generate CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          skip-setup-trivy: true
+          cache: false
+          scan-type: image
+          scan-ref: waysplit:security-${{ matrix.id }}
+          format: cyclonedx
+          output: sbom-linux-${{ matrix.id }}.cyclonedx.json
+          exit-code: "0"
+      - name: Generate SPDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          skip-setup-trivy: true
+          cache: false
+          scan-type: image
+          scan-ref: waysplit:security-${{ matrix.id }}
+          format: spdx-json
+          output: sbom-linux-${{ matrix.id }}.spdx.json
+          exit-code: "0"
+      - name: Upload container security evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: security-container-${{ matrix.id }}-${{ github.sha }}
+          path: |
+            trivy-image-linux-${{ matrix.id }}.json
+            sbom-linux-${{ matrix.id }}.cyclonedx.json
+            sbom-linux-${{ matrix.id }}.spdx.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Fail a blocked container after preserving evidence
+        if: always() && steps.image_gate.outcome == 'failure'
+        run: exit 1

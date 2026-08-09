@@ -1,0 +1,57 @@
+name: Bug report
+description: Report a reproducible WaySplit defect using synthetic or fully redacted data.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never attach a real statement, access token, household identifier, phone number, audit database, or unsanitized log. Security vulnerabilities belong in the private reporting channel described in the security policy.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed statement contents, secrets, personal identifiers, and hidden PDF/image metadata.
+          required: true
+        - label: This report is not a security vulnerability.
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or image digest
+      placeholder: v0.1.0 or ghcr.io/...@sha256:...
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      options:
+        - Docker Compose on macOS
+        - Docker Compose on Linux
+        - Native macOS
+        - Native Linux
+        - Other supported self-hosted deployment
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction with synthetic data
+      description: Provide the smallest sequence and synthetic fixture needed to reproduce the defect.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and sanitized evidence
+    validations:
+      required: true

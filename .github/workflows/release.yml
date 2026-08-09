@@ -1,0 +1,726 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify tagged source and build Python artifacts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: 3.12.13
+          cache: ""
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: 0.11.24
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Verify annotated tag and versions
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          test "$(git cat-file -t "refs/tags/$RELEASE_TAG")" = tag || {
+            echo "Release tags must be annotated (signed tags are recommended)." >&2
+            exit 1
+          }
+          ./scripts/check-version.sh "$RELEASE_TAG"
+          version=${RELEASE_TAG#v}
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Install locked development dependencies
+        run: uv sync --frozen --all-extras
+      - name: Run release checks
+        run: make check test
+      - name: Build Python distributions
+        run: |
+          uv lock --check
+          uv build
+      - name: Preserve Python release artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-python-${{ github.sha }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  image:
+    name: Verify image (${{ matrix.platform }})
+    needs:
+      - verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    permissions:
+      artifact-metadata: write
+      attestations: write
+      contents: read
+      id-token: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            id: amd64
+          - platform: linux/arm64
+            id: arm64
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - name: Resolve lowercase image name
+        id: image
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: echo "name=ghcr.io/${REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push untagged platform image
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ steps.image.outputs.name }},push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            VERSION=${{ needs.verify.outputs.version }}
+            VCS_REF=${{ github.sha }}
+          cache-from: type=gha,scope=release-${{ matrix.id }}
+          cache-to: type=gha,mode=max,scope=release-${{ matrix.id }}
+          # Release SBOMs are generated from the exact leaf image below. Disable
+          # implicit attestation manifests so the recorded digest is one leaf.
+          provenance: false
+          sbom: false
+      - name: Validate the immutable platform digest
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "Build did not return an immutable SHA-256 image digest." >&2
+            exit 1
+          }
+      - name: Smoke-test the exact pushed web service
+        env:
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          PLATFORM: ${{ matrix.platform }}
+          PLATFORM_ID: ${{ matrix.id }}
+        run: |
+          image_ref="$IMAGE_NAME@$IMAGE_DIGEST"
+          container_name="waysplit-release-${PLATFORM_ID}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          # Invoked by the EXIT trap rather than a direct shell call.
+          # shellcheck disable=SC2329
+          cleanup() {
+            docker rm --force --volumes "$container_name" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker pull --platform "$PLATFORM" "$image_ref"
+          actual_platform=$(docker image inspect "$image_ref" --format '{{.Os}}/{{.Architecture}}')
+          test "$actual_platform" = "$PLATFORM" || {
+            echo "Expected $PLATFORM but pulled $actual_platform." >&2
+            exit 1
+          }
+
+          docker run --detach --name "$container_name" --platform "$PLATFORM" \
+            --read-only --tmpfs /tmp:rw,noexec,nosuid,nodev,size=67108864 \
+            --mount type=volume,destination=/data \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --pids-limit 256 --memory 1536m --cpus 2 \
+            --env WAYSPLIT_BROWSER_ACCESS_TOKEN=release-smoke-only-token-000000000000 \
+            "$image_ref"
+
+          for _ in $(seq 1 90); do
+            state=$(docker inspect "$container_name" --format '{{.State.Status}}')
+            health=$(docker inspect "$container_name" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}')
+            if [ "$health" = healthy ]; then
+              exit 0
+            fi
+            if [ "$state" = exited ] || [ "$state" = dead ]; then
+              docker logs "$container_name" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          docker logs "$container_name" >&2
+          echo "Exact image did not become healthy within 180 seconds." >&2
+          exit 1
+      - name: Exercise the exact-image native document stack
+        id: native_smoke
+        continue-on-error: true
+        env:
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          PLATFORM: ${{ matrix.platform }}
+          PLATFORM_ID: ${{ matrix.id }}
+        run: |
+          image_ref="$IMAGE_NAME@$IMAGE_DIGEST"
+          fixture_path="$GITHUB_WORKSPACE/examples/synthetic/example-mobile-statement.pdf"
+          inventory_file="native-inventory-linux-$PLATFORM_ID.json"
+          test -f "$fixture_path"
+
+          # The one-shot process has no network, writable root, capabilities,
+          # destination credentials, or access to any non-synthetic statement.
+          docker run --rm --interactive --platform "$PLATFORM" \
+            --network none --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=67108864 \
+            --mount "type=bind,source=$fixture_path,destination=/fixture/statement.pdf,readonly" \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --pids-limit 128 --memory 1024m --cpus 2 \
+            --env WAYSPLIT_RELEASE_IMAGE_NAME="$IMAGE_NAME" \
+            --env WAYSPLIT_RELEASE_IMAGE_DIGEST="$IMAGE_DIGEST" \
+            --env WAYSPLIT_RELEASE_PLATFORM="$PLATFORM" \
+            "$image_ref" python - > "$inventory_file" <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import io
+          import json
+          import os
+          import platform
+          from pathlib import Path
+          from typing import Any
+
+          import PIL
+          import pypdfium2 as pdfium
+          import pypdfium2_raw
+          import pytesseract
+          from PIL import Image, features
+
+          EXPECTED_FIXTURE_SHA256 = "3973b0afeb065462f90e1bd2b73bdf7893629f6c7eb56a5724a9c86512684481"
+          EXPECTED_RENDER_SHA256 = "549b68c018d710fa912914dd231e5fabdddb957f1ad827e0f5e83d7d2e3d69d0"
+          EXPECTED_OCR_SHA256 = "864c5034463f5dc4188c7cb4efe2485f57045528daab51e4ae9ead5f042da4c8"
+          EXPECTED_LIBPDFIUM_SHA256 = {
+              "linux/amd64": "ed21a65d7b43a0cfefccb23b09ed94105883d6c76b7f705bf17bf926c27bcccb",
+              "linux/arm64": "19efe90ba1edb4c444edbd5d5f12a37590a5a719b7f391e54217dd2d43f85990",
+          }
+          EXPECTED_PILLOW_FEATURES = {
+              "pil": "12.3.0",
+              "freetype2": "2.14.3",
+              "littlecms2": "2.19",
+              "webp": "1.6.0",
+              "avif": "1.4.2",
+              "jpg": "6.2",
+              "jpg_2000": "2.5.4",
+              "zlib": "1.3.2",
+              "libtiff": "4.7.1",
+              "raqm": "0.10.5",
+              "fribidi": "1.0.16",
+              "harfbuzz": "14.2.1",
+              "libjpeg_turbo": "3.1.4.1",
+              "zlib_ng": "2.3.3",
+              "xcb": None,
+          }
+          EXPECTED_CODEC_SHA256 = {
+              "jpeg": "601e254bf4834eb7882be1e0fb17bbb5fa46cc1691644268143e27eb75a37cf6",
+              "png": "13bfe58d692cff3abb37325c40d4032546ec41680d6718db5d2ce09a91fd9329",
+              "tiff": "db00469fc21b8dcce5d53f7de0f8ce7ac022a595b433bb3dd04ded425b3adec3",
+              "webp": "34dfff344896cd5cd301c1dcfb37928ba6b2bf8bdeee707c0c700cbb3bad06db",
+          }
+
+
+          def require(condition: bool, message: str) -> None:
+              if not condition:
+                  raise RuntimeError(message)
+
+
+          def sha256_bytes(value: bytes) -> str:
+              return hashlib.sha256(value).hexdigest()
+
+
+          def sha256_file(path: Path) -> str:
+              digest = hashlib.sha256()
+              total = 0
+              with path.open("rb") as handle:
+                  while chunk := handle.read(1024 * 1024):
+                      total += len(chunk)
+                      require(total <= 128 * 1024 * 1024, "native library exceeded hash bound")
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+
+          expected_platform = os.environ["WAYSPLIT_RELEASE_PLATFORM"]
+          machine_platform = {
+              "aarch64": "linux/arm64",
+              "arm64": "linux/arm64",
+              "x86_64": "linux/amd64",
+              "amd64": "linux/amd64",
+          }.get(platform.machine().lower())
+          require(machine_platform == expected_platform, "native process architecture mismatch")
+
+          fixture = Path("/fixture/statement.pdf")
+          require(fixture.stat().st_size <= 1024 * 1024, "synthetic fixture exceeded size bound")
+          fixture_bytes = fixture.read_bytes()
+          fixture_sha256 = sha256_bytes(fixture_bytes)
+          require(fixture_sha256 == EXPECTED_FIXTURE_SHA256, "synthetic fixture digest mismatch")
+
+          wrapper_version = str(pdfium.PYPDFIUM_INFO)
+          pdfium_version = str(pdfium.PDFIUM_INFO)
+          require(wrapper_version == "5.12.1", "unexpected pypdfium2 wrapper version")
+          require(
+              pdfium_version == "152.0.7947.0@sourcebuild-native",
+              "unexpected embedded PDFium version",
+          )
+          libpdfium = Path(pypdfium2_raw.__file__).resolve().parent / "libpdfium.so"
+          require(libpdfium.is_file(), "embedded libpdfium.so was not found")
+          libpdfium_sha256 = sha256_file(libpdfium)
+          require(
+              libpdfium_sha256 == EXPECTED_LIBPDFIUM_SHA256[expected_platform],
+              "embedded libpdfium.so digest mismatch",
+          )
+
+          document = pdfium.PdfDocument(fixture)
+          try:
+              require(len(document) == 1, "synthetic PDF page count changed")
+              page = document[0]
+              try:
+                  bitmap = page.render(scale=2.0, rev_byteorder=True)
+                  try:
+                      rendered = bitmap.to_pil()
+                  finally:
+                      bitmap.close()
+              finally:
+                  page.close()
+          finally:
+              document.close()
+          require(rendered.mode == "RGB", "PDFium render mode changed")
+          require(rendered.size == (1224, 1584), "PDFium render dimensions changed")
+
+          rendered_png = io.BytesIO()
+          rendered.save(rendered_png, format="PNG", optimize=False)
+          rendered_bytes = rendered_png.getvalue()
+          require(len(rendered_bytes) <= 2 * 1024 * 1024, "rendered PNG exceeded size bound")
+          rendered_sha256 = sha256_bytes(rendered_bytes)
+          require(rendered_sha256 == EXPECTED_RENDER_SHA256, "PDFium render digest mismatch")
+
+          feature_inventory: dict[str, dict[str, Any]] = {}
+          for feature_name, expected_version in EXPECTED_PILLOW_FEATURES.items():
+              supported = bool(features.check(feature_name))
+              version = features.version(feature_name)
+              require(supported, f"required Pillow feature is unavailable: {feature_name}")
+              require(version is None or len(str(version)) <= 64, "Pillow version exceeded bound")
+              actual_version = None if version is None else str(version)
+              require(
+                  actual_version == expected_version,
+                  f"unexpected Pillow native feature version: {feature_name}",
+              )
+              feature_inventory[feature_name] = {
+                  "supported": supported,
+                  "version": actual_version,
+              }
+          require(PIL.__version__ == "12.3.0", "unexpected Pillow version")
+
+          codec_inventory: dict[str, dict[str, Any]] = {}
+          codec_sample = rendered.crop((0, 0, 256, 256))
+          for codec_name, format_name, save_options in (
+              ("jpeg", "JPEG", {"quality": 90, "subsampling": 0}),
+              ("png", "PNG", {"optimize": False}),
+              ("tiff", "TIFF", {"compression": "tiff_deflate"}),
+              ("webp", "WEBP", {"lossless": True}),
+          ):
+              encoded = io.BytesIO()
+              codec_sample.save(encoded, format=format_name, **save_options)
+              encoded_bytes = encoded.getvalue()
+              require(0 < len(encoded_bytes) <= 2 * 1024 * 1024, "codec output exceeded bound")
+              encoded.seek(0)
+              with Image.open(encoded) as decoded:
+                  decoded.load()
+                  require(decoded.size == codec_sample.size, "Pillow codec dimensions changed")
+              codec_sha256 = sha256_bytes(encoded_bytes)
+              require(
+                  codec_sha256 == EXPECTED_CODEC_SHA256[codec_name],
+                  f"Pillow codec digest mismatch: {codec_name}",
+              )
+              codec_inventory[codec_name] = {
+                  "bytes": len(encoded_bytes),
+                  "sha256": codec_sha256,
+              }
+
+          rendered_png.seek(0)
+          with Image.open(rendered_png) as decoded_render:
+              decoded_render.load()
+              ocr_image = decoded_render.convert("RGB")
+              ocr_text = pytesseract.image_to_string(
+                  ocr_image,
+                  lang="eng",
+                  config="--psm 6",
+                  timeout=60,
+              )
+          ocr_bytes = ocr_text.encode("utf-8")
+          require(len(ocr_bytes) <= 16 * 1024, "OCR output exceeded size bound")
+          ocr_sha256 = sha256_bytes(ocr_bytes)
+          require(ocr_sha256 == EXPECTED_OCR_SHA256, "Tesseract OCR digest mismatch")
+          for marker in ("EXAMPLE MOBILE", "AMOUNT DUE", "fictional"):
+              require(marker.casefold() in ocr_text.casefold(), f"OCR marker was not detected: {marker}")
+          tesseract_version = str(pytesseract.get_tesseract_version())
+          require(tesseract_version == "5.5.1", "unexpected Tesseract version")
+
+          inventory = {
+              "schema_version": 1,
+              "platform": expected_platform,
+              "machine": platform.machine(),
+              "image": {
+                  "name": os.environ["WAYSPLIT_RELEASE_IMAGE_NAME"],
+                  "digest": os.environ["WAYSPLIT_RELEASE_IMAGE_DIGEST"],
+              },
+              "fixture": {
+                  "name": fixture.name,
+                  "sha256": fixture_sha256,
+              },
+              "pdfium": {
+                  "wrapper_version": wrapper_version,
+                  "native_version": pdfium_version,
+                  "libpdfium_sha256": libpdfium_sha256,
+                  "render": {
+                      "mode": rendered.mode,
+                      "width": rendered.width,
+                      "height": rendered.height,
+                      "png_bytes": len(rendered_bytes),
+                      "png_sha256": rendered_sha256,
+                  },
+              },
+              "pillow": {
+                  "version": PIL.__version__,
+                  "features": feature_inventory,
+                  "codec_smoke": codec_inventory,
+              },
+              "tesseract": {
+                  "version": tesseract_version,
+                  "language": "eng",
+                  "ocr_utf8_bytes": len(ocr_bytes),
+                  "ocr_sha256": ocr_sha256,
+                  "required_markers_detected": True,
+              },
+          }
+          encoded_inventory = json.dumps(inventory, sort_keys=True, separators=(",", ":"))
+          require(len(encoded_inventory.encode("utf-8")) <= 16 * 1024, "inventory exceeded bound")
+          print(encoded_inventory)
+          PY
+
+          test "$(wc -c < "$inventory_file")" -le 16384
+          jq -e --arg platform "$PLATFORM" --arg image "$IMAGE_NAME" --arg digest "$IMAGE_DIGEST" '
+            .schema_version == 1
+            and .platform == $platform
+            and .image.name == $image
+            and .image.digest == $digest
+            and .pdfium.render.png_bytes > 0
+            and (.pdfium.libpdfium_sha256 | test("^[0-9a-f]{64}$"))
+            and (.pillow.codec_smoke | length == 4)
+            and .tesseract.required_markers_detected == true
+            and (.tesseract.ocr_sha256 | test("^[0-9a-f]{64}$"))
+          ' "$inventory_file" >/dev/null
+      - name: Create exact-image vulnerability report
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.73.0
+          scan-type: image
+          scan-ref: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          format: json
+          output: trivy-release-image-linux-${{ matrix.id }}.json
+          exit-code: "0"
+      - name: Enforce every high and critical finding
+        id: image_gate
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          skip-setup-trivy: true
+          cache: false
+          scan-type: image
+          scan-ref: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          format: table
+          exit-code: "1"
+      - name: Generate exact-image CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          skip-setup-trivy: true
+          cache: false
+          scan-type: image
+          scan-ref: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
+          format: cyclonedx
+          output: sbom-linux-${{ matrix.id }}.cyclonedx.json
+          exit-code: "0"
+      - name: Generate exact-image SPDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          skip-setup-trivy: true
+          cache: false
+          scan-type: image
+          scan-ref: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
+          format: spdx-json
+          output: sbom-linux-${{ matrix.id }}.spdx.json
+          exit-code: "0"
+      - name: Attest exact platform image provenance
+        id: provenance
+        if: success() && steps.image_gate.outcome == 'success' && steps.native_smoke.outcome == 'success'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Preserve signed platform provenance bundle
+        if: success() && steps.image_gate.outcome == 'success' && steps.native_smoke.outcome == 'success'
+        env:
+          ATTESTATION_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+          PLATFORM_ID: ${{ matrix.id }}
+        run: cp "$ATTESTATION_BUNDLE" "provenance-linux-$PLATFORM_ID.sigstore.json"
+      - name: Record the exact platform image
+        env:
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          PLATFORM_ID: ${{ matrix.id }}
+        run: |
+          printf '%s\n' "$IMAGE_DIGEST" > "digest-linux-$PLATFORM_ID.txt"
+          printf '%s@%s\n' "$IMAGE_NAME" "$IMAGE_DIGEST" > "container-linux-$PLATFORM_ID.txt"
+      - name: Preserve exact-image release evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-image-${{ matrix.id }}-${{ github.sha }}
+          path: |
+            digest-linux-${{ matrix.id }}.txt
+            container-linux-${{ matrix.id }}.txt
+            trivy-release-image-linux-${{ matrix.id }}.json
+            sbom-linux-${{ matrix.id }}.cyclonedx.json
+            sbom-linux-${{ matrix.id }}.spdx.json
+            provenance-linux-${{ matrix.id }}.sigstore.json
+            native-inventory-linux-${{ matrix.id }}.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Fail a blocked image after preserving evidence
+        if: always() && (steps.image_gate.outcome == 'failure' || steps.native_smoke.outcome == 'failure')
+        run: |
+          echo "A native smoke failure or unexcepted HIGH/CRITICAL finding blocks this platform image." >&2
+          exit 1
+
+  publish:
+    name: Assemble and publish verified immutable release
+    needs:
+      - verify
+      - image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - name: Resolve lowercase image name
+        id: image
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: echo "name=ghcr.io/${REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - name: Download Python release artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-python-${{ github.sha }}
+          path: dist
+      - name: Download all exact-image evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: release-image-*-${{ github.sha }}
+          path: dist
+          merge-multiple: true
+      - name: Require complete platform evidence
+        run: |
+          for platform in amd64 arm64; do
+            test -s "dist/digest-linux-$platform.txt"
+            test -s "dist/container-linux-$platform.txt"
+            test -s "dist/trivy-release-image-linux-$platform.json"
+            test -s "dist/sbom-linux-$platform.cyclonedx.json"
+            test -s "dist/sbom-linux-$platform.spdx.json"
+            test -s "dist/provenance-linux-$platform.sigstore.json"
+            test -s "dist/native-inventory-linux-$platform.json"
+            digest=$(tr -d '\r\n' < "dist/digest-linux-$platform.txt")
+            inventory="dist/native-inventory-linux-$platform.json"
+            test "$(wc -c < "$inventory")" -le 16384
+            jq -e --arg platform "linux/$platform" --arg digest "$digest" '
+              .schema_version == 1
+              and .platform == $platform
+              and .image.digest == $digest
+              and .pdfium.wrapper_version == "5.12.1"
+              and .pdfium.native_version == "152.0.7947.0@sourcebuild-native"
+              and (.pdfium.libpdfium_sha256 | test("^[0-9a-f]{64}$"))
+              and .pillow.version == "12.3.0"
+              and (.pillow.codec_smoke | length == 4)
+              and .tesseract.version == "5.5.1"
+              and .tesseract.required_markers_detected == true
+            ' "$inventory" >/dev/null
+          done
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish or recover manifest from only verified leaf images
+        id: manifest
+        env:
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          RELEASE_VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          amd64_digest=$(tr -d '\r\n' < dist/digest-linux-amd64.txt)
+          arm64_digest=$(tr -d '\r\n' < dist/digest-linux-arm64.txt)
+          for digest in "$amd64_digest" "$arm64_digest"; do
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
+          done
+
+          version_ref="$IMAGE_NAME:$RELEASE_VERSION"
+          sha_ref="$IMAGE_NAME:sha-$GITHUB_SHA"
+
+          inspect_optional_manifest() {
+            local image_ref=$1
+            local output_file=$2
+            local error_file=$3
+            local status
+            set +e
+            docker buildx imagetools inspect "$image_ref" --raw \
+              > "$output_file" 2> "$error_file"
+            status=$?
+            set -e
+            if [ "$status" -eq 0 ]; then
+              return 0
+            fi
+            case "$(cat "$error_file")" in
+              *"not found"*|*"Not Found"*|*"manifest unknown"*|*"MANIFEST_UNKNOWN"*) return 1 ;;
+              *)
+                echo "Could not determine whether image tag $image_ref exists:" >&2
+                cat "$error_file" >&2
+                exit 1
+                ;;
+            esac
+          }
+
+          verify_expected_manifest() {
+            jq -e --arg amd64 "$amd64_digest" --arg arm64 "$arm64_digest" '
+              .schemaVersion == 2
+              and (.manifests | length == 2)
+              and (([.manifests[].digest] | sort) == ([$amd64, $arm64] | sort))
+              and (([.manifests[] | "\(.platform.os)/\(.platform.architecture)"] | sort)
+                == (["linux/amd64", "linux/arm64"] | sort))
+            ' "$1" >/dev/null
+          }
+
+          version_exists=false
+          sha_exists=false
+          if inspect_optional_manifest "$version_ref" \
+            "$RUNNER_TEMP/version-existing.json" "$RUNNER_TEMP/version-error.txt"; then
+            version_exists=true
+            verify_expected_manifest "$RUNNER_TEMP/version-existing.json" || {
+              echo "Refusing to overwrite non-matching tag $version_ref" >&2
+              exit 1
+            }
+          fi
+          if inspect_optional_manifest "$sha_ref" \
+            "$RUNNER_TEMP/sha-existing.json" "$RUNNER_TEMP/sha-error.txt"; then
+            sha_exists=true
+            verify_expected_manifest "$RUNNER_TEMP/sha-existing.json" || {
+              echo "Refusing to overwrite non-matching tag $sha_ref" >&2
+              exit 1
+            }
+          fi
+
+          if [ "$version_exists" = false ] && [ "$sha_exists" = false ]; then
+            docker buildx imagetools create \
+              --tag "$version_ref" \
+              --tag "$sha_ref" \
+              "$IMAGE_NAME@$amd64_digest" \
+              "$IMAGE_NAME@$arm64_digest"
+          elif [ "$version_exists" = true ] && [ "$sha_exists" = false ]; then
+            docker buildx imagetools create --tag "$sha_ref" "$version_ref"
+          elif [ "$version_exists" = false ] && [ "$sha_exists" = true ]; then
+            docker buildx imagetools create --tag "$version_ref" "$sha_ref"
+          fi
+
+          docker buildx imagetools inspect "$version_ref" --raw > dist/container-manifest.json
+          docker buildx imagetools inspect "$sha_ref" --raw > "$RUNNER_TEMP/sha-manifest.json"
+          cmp dist/container-manifest.json "$RUNNER_TEMP/sha-manifest.json"
+          verify_expected_manifest dist/container-manifest.json
+
+          image_digest=$(docker buildx imagetools inspect "$version_ref" \
+            | awk '$1 == "Digest:" { print $2; exit }')
+          [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "Could not resolve the published manifest digest." >&2
+            exit 1
+          }
+          printf '%s@%s\n' "$IMAGE_NAME" "$image_digest" > dist/container-image.txt
+          echo "digest=$image_digest" >> "$GITHUB_OUTPUT"
+      - name: Assemble release checksums
+        run: |
+          checksum_file="$RUNNER_TEMP/SHA256SUMS"
+          (
+            cd dist
+            find . -maxdepth 1 -type f -print0 \
+              | sort -z \
+              | xargs -0 sha256sum
+          ) > "$checksum_file"
+          install -m 0644 "$checksum_file" dist/SHA256SUMS
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.verify.outputs.tag }}
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          IMAGE_DIGEST: ${{ steps.manifest.outputs.digest }}
+        run: |
+          notes_file="$RUNNER_TEMP/release-notes.md"
+          {
+            echo "## Immutable deployment and rollback"
+            echo
+            echo "This release is published as an immutable image digest:"
+            echo
+            echo "\`$IMAGE_NAME@$IMAGE_DIGEST\`"
+            echo
+            echo "The amd64 and arm64 leaf digests each passed the same smoke test,"
+            echo "native PDFium/Pillow/Tesseract smoke, HIGH/CRITICAL vulnerability gate,"
+            echo "per-platform SBOM/inventory generation, and signed provenance before"
+            echo "this manifest was created. The exact evidence is attached."
+            echo
+            echo "Set \`WAYSPLIT_IMAGE\` to that digest and run Compose with \`--no-build\`."
+            echo "Rollback by restoring the protected pre-upgrade data backup, when required by the migration notes, and setting \`WAYSPLIT_IMAGE\` to the prior release digest. Software rollback does not reverse an already-posted Splitwise expense."
+            echo
+            echo "Verify every downloaded asset against \`SHA256SUMS\` before use."
+          } > "$notes_file"
+          release_flags=()
+          if [ "$RELEASE_TAG" = "v0.1.0" ]; then
+            release_flags+=(--prerelease)
+          fi
+          gh release create "$RELEASE_TAG" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            "${release_flags[@]}" \
+            --notes-file "$notes_file"

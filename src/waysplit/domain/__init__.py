@@ -1,0 +1,75 @@
+"""Public deterministic domain API for WaySplit."""
+
+from .allocation import (
+    AllocationRules,
+    BillAllocation,
+    ChargeAllocation,
+    UnresolvedOwnerError,
+    UnresolvedOwnership,
+    allocate_bill,
+    allocate_largest_remainder,
+)
+from .fingerprint import FINGERPRINT_VERSION, bill_fingerprint, logical_bill_payload
+from .gates import (
+    GateReason,
+    GateReasonCode,
+    PostingDecision,
+    PostingGateConfig,
+    PostingStatus,
+    evaluate_posting_gate,
+)
+from .models import (
+    AccountMetadata,
+    BillingMetadata,
+    BillTotals,
+    Charge,
+    ChargeCategory,
+    ChargeEvidence,
+    ChargeScope,
+    Confidence,
+    EvidenceSource,
+    IssuerMetadata,
+    NormalizedBill,
+    StatementMetadata,
+)
+from .money import CENT, ZERO, Money, format_money, parse_money
+from .reconciliation import ReconciliationCheck, ReconciliationResult, reconcile_bill
+
+__all__ = [
+    "CENT",
+    "FINGERPRINT_VERSION",
+    "ZERO",
+    "AccountMetadata",
+    "AllocationRules",
+    "BillAllocation",
+    "BillTotals",
+    "BillingMetadata",
+    "Charge",
+    "ChargeAllocation",
+    "ChargeCategory",
+    "ChargeEvidence",
+    "ChargeScope",
+    "Confidence",
+    "EvidenceSource",
+    "GateReason",
+    "GateReasonCode",
+    "IssuerMetadata",
+    "Money",
+    "NormalizedBill",
+    "PostingDecision",
+    "PostingGateConfig",
+    "PostingStatus",
+    "ReconciliationCheck",
+    "ReconciliationResult",
+    "StatementMetadata",
+    "UnresolvedOwnerError",
+    "UnresolvedOwnership",
+    "allocate_bill",
+    "allocate_largest_remainder",
+    "bill_fingerprint",
+    "evaluate_posting_gate",
+    "format_money",
+    "logical_bill_payload",
+    "parse_money",
+    "reconcile_bill",
+]

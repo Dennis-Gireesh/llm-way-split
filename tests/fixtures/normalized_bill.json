@@ -1,0 +1,84 @@
+{
+  "schema_version": "1.0",
+  "issuer": {
+    "name": "Example Mobile",
+    "carrier_code": null
+  },
+  "account": {
+    "account_identifier": "example-account-alpha",
+    "currency": "USD",
+    "subscriber_name": null
+  },
+  "statement": {
+    "statement_identifier": "example-statement-2026-08",
+    "issued_on": "2026-08-05",
+    "period_start": "2026-07-01",
+    "period_end": "2026-07-31"
+  },
+  "billing": {
+    "due_on": "2026-08-20",
+    "autopay_scheduled_on": null,
+    "billing_name": null,
+    "billing_address": null
+  },
+  "totals": {
+    "balance_forward": "10.00",
+    "payments_and_credits": "-10.00",
+    "current_charges": "45.00",
+    "other_adjustments": "0.00",
+    "amount_due": "45.00"
+  },
+  "charges": [
+    {
+      "charge_id": "service-alpha-plan",
+      "description": "Service Alpha monthly plan",
+      "amount": "30.00",
+      "category": "plan",
+      "scope": "line",
+      "service_identifier": "service-alpha",
+      "confidence": "0.99",
+      "evidence": [
+        {
+          "source": "pdf_text",
+          "page": 1,
+          "text": "Service Alpha monthly plan 30.00",
+          "locator": "example-row-alpha"
+        }
+      ]
+    },
+    {
+      "charge_id": "service-beta-device",
+      "description": "Service Beta equipment installment",
+      "amount": "12.00",
+      "category": "device",
+      "scope": "line",
+      "service_identifier": "service-beta",
+      "confidence": "0.98",
+      "evidence": [
+        {
+          "source": "pdf_text",
+          "page": 1,
+          "text": "Service Beta equipment installment 12.00",
+          "locator": "example-row-beta"
+        }
+      ]
+    },
+    {
+      "charge_id": "account-tax",
+      "description": "Account taxes",
+      "amount": "3.00",
+      "category": "tax",
+      "scope": "account",
+      "service_identifier": null,
+      "confidence": "0.97",
+      "evidence": [
+        {
+          "source": "pdf_text",
+          "page": 1,
+          "text": "Account taxes 3.00",
+          "locator": "example-row-tax"
+        }
+      ]
+    }
+  ]
+}

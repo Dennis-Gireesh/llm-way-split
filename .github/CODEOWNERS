@@ -1,0 +1,3 @@
+# Require the repository owner to review changes when branch protection uses
+# the "Require review from Code Owners" rule.
+* @Dennis-Gireesh

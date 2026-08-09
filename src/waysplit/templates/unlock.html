@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Unlock · WaySplit</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+  </head>
+  <body class="unlock-page">
+    <main class="unlock-card">
+      <div class="unlock-mark" aria-hidden="true">WS</div>
+      <p class="eyebrow">Private local workspace · {{ version }}</p>
+      <h1>Unlock this browser</h1>
+      <p>WaySplit keeps its API closed to model services, parser workers, and other local peers. Paste the startup token printed by <code>waysplit serve</code> or the WaySplit container log.</p>
+      {% if invalid %}
+      <p class="unlock-error" role="alert">That token did not match. Check the current startup output and try again.</p>
+      {% endif %}
+      <form action="/unlock" method="post">
+        <label class="field" for="access-token">
+          <span>Browser unlock token</span>
+          <input id="access-token" name="access_token" type="password" minlength="20" maxlength="500" autocomplete="current-password" spellcheck="false" required autofocus>
+        </label>
+        <button class="signal-button" type="submit">Open private workspace</button>
+      </form>
+      <small>The token is exchanged for an HttpOnly session cookie, is never placed in the URL, and rotates on restart unless you configured a stable value.</small>
+    </main>
+  </body>
+</html>

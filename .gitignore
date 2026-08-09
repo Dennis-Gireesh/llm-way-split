@@ -1,0 +1,42 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+config.yaml
+*.pem
+*.key
+
+# Statements, generated previews, and local data
+data/
+uploads/
+statements/
+*.sqlite
+*.sqlite3
+*.db
+*.pdf
+*.heic
+*.tif
+*.tiff
+!tests/fixtures/**/*.pdf
+!examples/synthetic/*.pdf
+
+# Python
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+
+# Security artifacts generated locally
+sbom*.json
+sbom*.spdx
+trivy*.json

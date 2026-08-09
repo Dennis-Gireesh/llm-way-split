@@ -1,0 +1,11 @@
+Example Mobile synthetic statement
+Reference: example-statement-2026-08
+Period: 2026-07-01 through 2026-07-31
+Service Alpha monthly plan: 30.00
+Service Beta equipment installment: 12.00
+Account taxes: 3.00
+Current charges: 45.00
+Balance forward: 10.00
+Payments and credits: -10.00
+Other adjustments: 0.00
+Amount due: 45.00

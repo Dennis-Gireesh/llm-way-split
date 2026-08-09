@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Privacy · WaySplit</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+  </head>
+  <body class="privacy-page">
+    <main class="privacy-document">
+      <nav aria-label="Privacy navigation">
+        <a href="/">← Back to WaySplit</a>
+        <span>Version {{ version }}</span>
+      </nav>
+      <p class="eyebrow">Local policy · read before connecting a destination</p>
+      <h1>Privacy boundary</h1>
+      <p class="privacy-lead">WaySplit is self-hosted software. The maintainers do not receive your statements merely because you install it. Your chosen host, model endpoint, destination, backups, and logs determine the real boundary.</p>
+
+      <section>
+        <h2>What stays local by default</h2>
+        <p>Statement parsing, OCR, normalized bill data, deterministic allocation, reconciliation, duplicate detection, previews, and the tamper-evident audit ledger run on the operator-controlled host. Source uploads are removed after extraction by default. Normalized bills, evidence excerpts, household rules, fingerprints, remote IDs, and audit events remain in SQLite until the operator removes the data directory.</p>
+      </section>
+
+      <section>
+        <h2>Local model disclosure</h2>
+        <p>The selected Ollama or OpenAI-compatible endpoint receives the text or page images needed for extraction. Version 0.1 rejects remote-model mode; “OpenAI-compatible” describes the API shape of a local endpoint, not a cloud fallback.</p>
+      </section>
+
+      <section>
+        <h2>Splitwise disclosure and consent</h2>
+        <p>Only after explicit confirmation, WaySplit sends the displayed group ID, date, currency, description, notes, total, payer/member IDs, paid shares, and owed shares. It does not attach the original statement, full OCR text, raw model response, credentials, or local audit history.</p>
+        <p>Splitwise then controls the remote expense under its own privacy practices. Splitwise may collect information about this integration’s API use (“API Usage Data”) and, under its published API terms, may use that information for any business purpose.</p>
+        <p>The operator must show this disclosure to every affected Splitwise end user and obtain their explicit consent before processing their Splitwise materials. One operator cannot consent for another participant. Account consent is separate from confirming each expense.</p>
+        <p>This alpha is scoped to personal, noncommercial self-hosting. Operators must review the current <a href="https://dev.splitwise.com/" target="_blank" rel="noopener noreferrer">Splitwise API terms</a> and <a href="https://www.splitwise.com/privacy" target="_blank" rel="noopener noreferrer">Splitwise privacy policy</a>; the project does not claim that commercial or fee-based use is permitted.</p>
+      </section>
+
+      <section>
+        <h2>Credentials and telemetry</h2>
+        <p>A Splitwise token pasted into the browser is kept only in that tab’s memory and sent to the local service for the requested connection, post, or rollback. It is not written to browser storage, SQLite, or the audit ledger; server-side destination credentials are unsupported. The separate browser-unlock secret is exchanged for an eight-hour HttpOnly session and must be protected in startup logs. WaySplit {{ version }} sends no maintainer analytics or crash reports.</p>
+      </section>
+
+      <section>
+        <h2>Operator responsibilities</h2>
+        <p>Tell household members what is processed, obtain required consent, restrict host and network access, use disk encryption, protect backups, review every preview, and remove destination data through the provider when needed. Do not upload real statements to GitHub issues, pull requests, CI, or maintainers.</p>
+      </section>
+
+      <aside>
+        <strong>Full policy</strong>
+        <p>The bundled <code>docs/PRIVACY.md</code> is the complete project policy and documents retention, deletion limits, logs, incident response, and data-subject requests.</p>
+      </aside>
+    </main>
+  </body>
+</html>

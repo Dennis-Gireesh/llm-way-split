@@ -1,0 +1,19 @@
+app:
+  host: 127.0.0.1
+  port: 9876
+  data_dir: ./data
+  retain_source: false
+  max_upload_mib: 25
+  max_pages: 24
+
+models:
+  endpoints:
+    - http://127.0.0.1:11434
+    - http://127.0.0.1:8080
+  timeout_seconds: 300
+
+allocation:
+  # Posting is always exact to the cent; non-zero values are rejected.
+  reconciliation_tolerance: "0.00"
+  minimum_extraction_confidence: 0.80
+  require_charge_evidence: true
