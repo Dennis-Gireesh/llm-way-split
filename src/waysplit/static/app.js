@@ -203,6 +203,7 @@
       "json-editor-state",
       "save-bill-json",
       "ownership-state",
+      "auto-assign-owners",
       "build-preview",
       "preview-empty",
       "preview-content",
@@ -278,6 +279,7 @@
     });
     refs["save-bill-json"].addEventListener("click", saveBillCorrection);
     refs["build-preview"].addEventListener("click", buildPreview);
+    refs["auto-assign-owners"].addEventListener("click", autoAssignOwners);
     refs["calculate-whatsapp-summary"].addEventListener("click", buildPreview);
     refs["copy-whatsapp-summary"].addEventListener("click", copyWhatsAppSummary);
     refs["refresh-history"].addEventListener("click", refreshRecords);
@@ -1014,6 +1016,10 @@
     }
     refs["review-empty"].hidden = true;
     refs["review-content"].hidden = false;
+    if (ensureIdentifiedParticipants()) {
+      state.householdSaved = false;
+      renderHousehold();
+    }
     renderStatementMeta();
     renderReconciliation();
     renderGate();
@@ -1321,6 +1327,110 @@
       }
     });
     markHouseholdDirty();
+    updateOwnershipState();
+  }
+
+  function linePersonName(charge) {
+    if (!charge || charge.scope !== "line") {
+      return "";
+    }
+    const description = String(charge.description || "").trim();
+    const match = description.match(/(?:wireless\s+service|service)\s*[-–—:]\s*(.+)$/i);
+    const candidate = (match ? match[1] : description)
+      .replace(/\s*\([^)]*\)\s*$/, "")
+      .trim();
+    if (!candidate || /^(total|summary|account|group\s+\d+)/i.test(candidate)) {
+      return "";
+    }
+    return candidate.slice(0, 80);
+  }
+
+  function identifiedPeople() {
+    const run = state.activeRun;
+    if (!run || !run.bill || !Array.isArray(run.bill.charges)) {
+      return [];
+    }
+    const names = [];
+    const seen = new Set();
+    run.bill.charges.forEach((charge) => {
+      const name = linePersonName(charge);
+      const key = name.toLocaleLowerCase();
+      if (name && !seen.has(key)) {
+        seen.add(key);
+        names.push(name);
+      }
+    });
+    return names;
+  }
+
+  function participantSlug(name, used) {
+    const base = name.toLocaleLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 50) || "member";
+    let slug = base;
+    let suffix = 2;
+    while (used.has(slug)) {
+      slug = `${base}-${suffix}`;
+      suffix += 1;
+    }
+    return slug;
+  }
+
+  function ensureIdentifiedParticipants() {
+    if (!state.household) {
+      return false;
+    }
+    const names = identifiedPeople();
+    if (!names.length) {
+      return false;
+    }
+    const participants = state.household.participants || [];
+    const byName = new Map(participants.filter((person) => person.name).map((person) => [person.name.toLocaleLowerCase(), person]));
+    const used = new Set(participants.map((person) => person.id));
+    let changed = false;
+    if (participants.length === 1 && !participants[0].name) {
+      participants.splice(0, 1);
+      changed = true;
+    }
+    names.forEach((name) => {
+      const key = name.toLocaleLowerCase();
+      if (byName.has(key)) {
+        return;
+      }
+      const participant = { id: participantSlug(name, used), name, weight: "1" };
+      participants.push(participant);
+      byName.set(key, participant);
+      used.add(participant.id);
+      changed = true;
+    });
+    return changed;
+  }
+
+  function autoAssignOwners() {
+    if (!state.household || !state.activeRun || !state.activeRun.bill) {
+      return;
+    }
+    const changed = ensureIdentifiedParticipants();
+    const byName = new Map((state.household.participants || []).map((person) => [person.name.toLocaleLowerCase(), person]));
+    let assigned = 0;
+    state.activeRun.bill.charges.forEach((charge) => {
+      if (charge.scope !== "line" || !charge.service_identifier) {
+        return;
+      }
+      const person = byName.get(linePersonName(charge).toLocaleLowerCase());
+      if (person && state.household.service_owners[charge.service_identifier] !== person.id) {
+        state.household.service_owners[charge.service_identifier] = person.id;
+        assigned += 1;
+      }
+    });
+    if (changed || assigned) {
+      state.householdSaved = false;
+      renderHousehold();
+      renderCharges();
+      markHouseholdDirty();
+    }
+    toast(assigned ? `Assigned ${assigned} line${assigned === 1 ? "" : "s"} to the identified people.` : "No matching line owners were found.", assigned ? "success" : "error");
     updateOwnershipState();
   }
 

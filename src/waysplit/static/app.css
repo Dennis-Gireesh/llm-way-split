@@ -1348,6 +1348,13 @@ textarea {
   flex-wrap: wrap;
 }
 
+.review-action-buttons {
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .whatsapp-summary-heading h3 {
   margin: 3px 0 5px;
 }
