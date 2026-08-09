@@ -1431,7 +1431,6 @@
       return;
     }
     const preview = run.preview;
-    const isLocalSummary = preview.destination === "local_summary";
     if (!preview || !Array.isArray(preview.shares) || !preview.shares.length) {
       panel.hidden = true;
       refs["whatsapp-summary-text"].value = "";
@@ -1745,6 +1744,7 @@
       return;
     }
     const preview = run.preview;
+    const isLocalSummary = preview.destination === "local_summary";
     refs["preview-empty"].hidden = true;
     refs["preview-content"].hidden = false;
     setText(refs["preview-description"], preview.description || "Splitwise expense");
