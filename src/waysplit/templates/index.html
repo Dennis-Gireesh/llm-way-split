@@ -212,6 +212,14 @@
             </details>
 
             <div class="household-footer">
+              <label class="field" for="output-destination">
+                <span>How will you use the result?</span>
+                <select id="output-destination" name="output_destination">
+                  <option value="local_summary">WhatsApp / local summary (recommended)</option>
+                  <option value="splitwise">Splitwise expense (optional)</option>
+                </select>
+                <small>Local summary needs no Splitwise account or API key. Choose Splitwise only when you are ready to connect it.</small>
+              </label>
               <label class="field">
                 <span>Who paid the statement?</span>
                 <select id="payer-select" name="payer_participant_id">

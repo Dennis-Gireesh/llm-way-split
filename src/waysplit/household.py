@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -45,6 +45,7 @@ class HouseholdConfig(HouseholdModel):
     service_owners: dict[str, str] = Field(default_factory=dict)
     payer_participant_id: str | None = None
     splitwise_group_id: int | None = Field(default=None, ge=0)
+    output_destination: Literal["splitwise", "local_summary"] = "splitwise"
 
     @field_validator("splitwise_group_id", mode="before")
     @classmethod
@@ -132,12 +133,13 @@ def build_expense_preview(
     total = allocation.allocated_total
     shares: list[PreviewShare] = []
     blockers: list[str] = []
+    is_local_summary = household.output_destination == "local_summary"
 
     if total <= 0:
         blockers.append("The allocatable current-charge total must be greater than zero.")
-    if payer_id is None:
+    if payer_id is None and not is_local_summary:
         blockers.append("Choose which household member paid the statement.")
-    if household.splitwise_group_id is None:
+    if household.splitwise_group_id is None and not is_local_summary:
         blockers.append("Add a Splitwise group ID (use 0 for an expense outside a group).")
 
     for participant in household.participants:
@@ -147,7 +149,11 @@ def build_expense_preview(
             blockers.append(
                 f"{participant.name} has a negative share, which cannot be posted as an expense."
             )
-        if participant.splitwise_user_id is None and (owed != 0 or paid != 0):
+        if (
+            participant.splitwise_user_id is None
+            and (owed != 0 or paid != 0)
+            and not is_local_summary
+        ):
             blockers.append(f"Add a Splitwise user ID for {participant.name}.")
         shares.append(
             PreviewShare(
@@ -173,6 +179,7 @@ def build_expense_preview(
         ),
     ]
     return ExpensePreview(
+        destination="local_summary" if is_local_summary else "splitwise",
         description=description,
         details="\n".join(details_lines)[:1800],
         date=f"{bill.statement.issued_on.isoformat()}T12:00:00Z",

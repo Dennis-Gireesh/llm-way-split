@@ -55,6 +55,30 @@ def _preview(bill: NormalizedBill, *, postable: bool = True):
     )
 
 
+def test_local_summary_does_not_require_splitwise_account(normalized_bill: NormalizedBill) -> None:
+    household = HouseholdConfig(
+        participants=(
+            Participant(id="member-alpha", name="Member Alpha", weight="1"),
+            Participant(id="member-beta", name="Member Beta", weight="1"),
+        ),
+        service_owners={
+            "service-alpha": "member-alpha",
+            "service-beta": "member-beta",
+        },
+        output_destination="local_summary",
+    )
+    allocation = allocate_bill(normalized_bill, household.allocation_rules())
+    preview = build_expense_preview(
+        bill=normalized_bill,
+        allocation=allocation,
+        household=household,
+    )
+    assert preview.destination == "local_summary"
+    assert preview.postable
+    assert not preview.blockers
+    assert sum((share.owed_share for share in preview.shares), Decimal("0")) == preview.cost
+
+
 def _remote_expense(
     bill: NormalizedBill,
     *,

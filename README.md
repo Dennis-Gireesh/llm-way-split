@@ -3,12 +3,13 @@
 WaySplit is a local-first, self-hosted mobile statement splitter. A locally
 running language or vision model extracts a carrier-neutral bill; deterministic
 code then reconciles every cent, applies household rules, prevents duplicates,
-and prepares a Splitwise expense for explicit approval.
+and prepares either a copy-ready household summary or an optional Splitwise
+expense for explicit approval.
 
 Open the browser app at `http://127.0.0.1:9876`. There is no cloud-model
 fallback, no analytics, and no automatic external posting.
 
-> **Release status:** `v0.1.9` is an operational, production-minded alpha for a
+> **Release status:** `v0.1.10` is an operational, production-minded alpha for a
 > single operator on a trusted Mac or Linux host. The full browser-to-Splitwise
 > flow ships, but model extraction can still be wrong even when totals match.
 > Review every charge and allocation before posting.
@@ -32,11 +33,12 @@ trusted computer and binds to local loopback by default. Then follow the five
 numbered sections in the browser:
 
 1. Choose a local model and run the fictional readiness test.
-2. Add the people on the bill, choose the payer, and save the household.
+2. Add the people on the bill and assign line owners. Choose **WhatsApp / local
+   summary** as the destination; no Splitwise account is needed.
 3. Drop in the monthly PDF or image and choose **Extract statement**.
 4. Read every charge and wait for both reconciliation checks to pass.
-5. Build the preview. Only if you choose Splitwise, connect it and confirm the
-   exact expense shown on screen.
+5. Build the preview and copy the ready-to-share WhatsApp message. Splitwise is
+   optional and can be connected later if you have API access.
 
 The first four steps never contact Splitwise. To stop the local service, run
 `docker compose stop waysplit`. To start it again, double-click `start.command`
@@ -147,8 +149,10 @@ docker compose --profile ollama down
 1. **Choose a local reader.** WaySplit discovers only configured endpoints and
    tests the selected model with a fictional statement. Discovery never sends a
    real document.
-2. **Define the household.** Add stable participant IDs, weights, line owners,
-   payer, and optional Splitwise mappings. Destination user IDs must be unique.
+2. **Define the household.** Add stable participant IDs, weights, and line
+   owners. The default **WhatsApp / local summary** destination needs no payer,
+   group ID, or Splitwise user IDs. Destination user IDs are only required when
+   you explicitly choose Splitwise.
 3. **Upload a statement.** PDFs, PNG, JPEG, TIFF, and WebP are accepted within
    configured size/page/resource limits. Native PDF text is preferred; local OCR
    and page rendering are fallbacks.
@@ -157,7 +161,8 @@ docker compose --profile ollama down
    invalidates any earlier preview.
 5. **Build a dry run.** Exact decimal allocation and largest-remainder rounding
    produce participant shares that sum exactly to current charges.
-6. **Approve or keep local.** The preview remains local until a one-time
+6. **Copy or approve.** In local-summary mode, copy the formatted WhatsApp
+   message; nothing is sent automatically. In Splitwise mode, the preview remains local until a one-time
    confirmation is issued and both acknowledgements are checked.
 7. **Verify the destination result.** WaySplit reads the created expense back.
    A verified, unverified, failed, or ambiguous result is persisted explicitly.
@@ -321,7 +326,7 @@ Shipped in `v0.1.0`:
 
 Not shipped in `v0.1.0`:
 
-- WhatsApp publishing, email attachment ingestion, schedules, or unattended
+- automatic WhatsApp sending, email attachment ingestion, schedules, or unattended
   posting;
 - in-app retry authorization after an ambiguous remote write; version `0.1.0`
   keeps that run locked even after the operator resolves the destination manually;

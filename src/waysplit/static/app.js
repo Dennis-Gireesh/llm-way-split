@@ -176,6 +176,7 @@
       "add-participant",
       "payer-select",
       "group-id",
+      "output-destination",
       "save-household",
       "household-save-state",
       "splitwise-connect",
@@ -290,6 +291,10 @@
     });
     refs["group-id"].addEventListener("input", (event) => {
       state.household.splitwise_group_id = event.target.value === "" ? null : Number(event.target.value);
+    });
+    refs["output-destination"].addEventListener("change", (event) => {
+      state.household.output_destination = event.target.value;
+      renderHousehold();
     });
     refs["connect-splitwise"].addEventListener("click", connectSplitwise);
     ["input", "change"].forEach((eventName) => {
@@ -714,6 +719,7 @@
       service_owners: {},
       payer_participant_id: null,
       splitwise_group_id: null,
+      output_destination: "local_summary",
     };
   }
 
@@ -748,6 +754,7 @@
     refs["group-id"].value = state.household.splitwise_group_id === null || state.household.splitwise_group_id === undefined
       ? ""
       : String(state.household.splitwise_group_id);
+    refs["output-destination"].value = state.household.output_destination || "local_summary";
     refs["household-save-state"].className = `save-state${state.householdSaved ? " is-saved" : " is-dirty"}`;
     setText(refs["household-save-state"], state.householdSaved ? "Saved locally" : "Unsaved changes");
     if (state.splitwiseContext) {
@@ -1125,6 +1132,7 @@
       service_owners: serviceOwners,
       payer_participant_id: payer,
       splitwise_group_id: groupRaw ? Number(groupRaw) : null,
+      output_destination: refs["output-destination"].value === "splitwise" ? "splitwise" : "local_summary",
     };
   }
 
@@ -1423,6 +1431,7 @@
       return;
     }
     const preview = run.preview;
+    const isLocalSummary = preview.destination === "local_summary";
     if (!preview || !Array.isArray(preview.shares) || !preview.shares.length) {
       panel.hidden = true;
       refs["whatsapp-summary-text"].value = "";
@@ -1742,6 +1751,8 @@
     setText(refs["preview-cost"], formatMoney(preview.cost, preview.currency_code));
     setText(refs["preview-digest"], run.preview_digest || "—");
     refs["preview-digest"].title = run.preview_digest || "";
+    const proofLabel = document.querySelector(".expense-proof .micro-label");
+    if (proofLabel) setText(proofLabel, isLocalSummary ? "WhatsApp / local summary" : "Splitwise dry run");
     const metadata = [
       ["Destination", preview.destination || "splitwise"],
       ["Expense date", formatDate(preview.date)],
@@ -1778,13 +1789,14 @@
     } else {
       replace(refs["preview-blockers"], []);
     }
-    const canPost = run.status === "ready" && blockers.length === 0;
+    const canPost = !isLocalSummary && run.status === "ready" && blockers.length === 0;
     refs["open-confirmation"].disabled = !canPost;
+    setText(refs["open-confirmation"], isLocalSummary ? "Splitwise not connected" : "Review & confirm post");
     if (run.status === "ready") {
-      setText(refs["approval-title"], canPost ? "Ready for your decision" : "Preview is blocked");
-      setText(refs["approval-copy"], canPost
-        ? "The preview is still local and has not been sent to Splitwise."
-        : "Resolve every blocker and rebuild this preview.");
+      setText(refs["approval-title"], isLocalSummary ? "Local result ready to share" : (canPost ? "Ready for your decision" : "Preview is blocked"));
+      setText(refs["approval-copy"], isLocalSummary
+        ? "Copy the WhatsApp summary above. Nothing is sent anywhere."
+        : (canPost ? "The preview is still local and has not been sent to Splitwise." : "Resolve every blocker and rebuild this preview."));
     } else if (["posted", "posted_unverified"].includes(run.status)) {
       setText(refs["approval-title"], "This preview was already posted");
       setText(refs["approval-copy"], "Use the verified app-created record below if a rollback is needed.");
