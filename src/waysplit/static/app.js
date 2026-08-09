@@ -190,6 +190,7 @@
       "whatsapp-summary",
       "whatsapp-summary-copy",
       "whatsapp-summary-text",
+      "calculate-whatsapp-summary",
       "copy-whatsapp-summary",
       "balance-equation",
       "line-equation",
@@ -277,6 +278,7 @@
     });
     refs["save-bill-json"].addEventListener("click", saveBillCorrection);
     refs["build-preview"].addEventListener("click", buildPreview);
+    refs["calculate-whatsapp-summary"].addEventListener("click", buildPreview);
     refs["copy-whatsapp-summary"].addEventListener("click", copyWhatsAppSummary);
     refs["refresh-history"].addEventListener("click", refreshRecords);
     refs["verify-audit"].addEventListener("click", verifyAudit);
@@ -1138,9 +1140,10 @@
     }
     const preview = run.preview;
     if (!preview || !Array.isArray(preview.shares) || !preview.shares.length) {
-      panel.hidden = true;
+      panel.hidden = false;
       refs["whatsapp-summary-text"].value = "";
       refs["copy-whatsapp-summary"].disabled = true;
+      setText(refs["whatsapp-summary-copy"], "Assign line owners, then click Calculate household shares below.");
       return;
     }
     panel.hidden = false;
