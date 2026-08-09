@@ -3,6 +3,12 @@
 This file records user-visible and trust-boundary changes for each immutable
 release. Dates use UTC.
 
+## 0.1.9 — 2026-08-09
+
+Simplified Splitwise setup with a guided three-step personal API-key flow,
+account/group/member discovery, and clearer privacy handling. The app now
+explains why OAuth requires a registered Splitwise app in self-hosted mode.
+
 ## 0.1.8 — 2026-08-09
 
 Added deterministic handling for service tables with per-line Total columns

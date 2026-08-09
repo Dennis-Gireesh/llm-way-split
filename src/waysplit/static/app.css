@@ -949,6 +949,19 @@ a {
   font-size: 11px;
 }
 
+.splitwise-steps {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 18px;
+  padding: 14px 16px 14px 34px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(245, 241, 230, 0.72);
+  color: var(--carbon-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .connect-form {
   display: grid;
   grid-template-columns: minmax(210px, 1fr) minmax(270px, 1.35fr) auto;

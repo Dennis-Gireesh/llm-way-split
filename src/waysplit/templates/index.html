@@ -171,18 +171,23 @@
                 <span id="splitwise-connection-badge" class="save-state">Not connected</span>
               </summary>
               <div class="connect-body">
-                <p>WaySplit can fetch your account, groups, and member IDs once. The token stays only in this browser tab’s memory and is reused for an approved post or rollback.</p>
+                <p>Connect once to let WaySplit find your account, group, and household members. You do not need to type numeric IDs.</p>
+                <ol class="splitwise-steps">
+                  <li>Open <a href="https://secure.splitwise.com/apps" target="_blank" rel="noopener noreferrer">Splitwise developer apps</a> and sign in.</li>
+                  <li>Open your app, copy its personal API key, then return here.</li>
+                  <li>Paste the key below. WaySplit uses it only in this tab to load your choices.</li>
+                </ol>
                 <div id="splitwise-connect-form" class="connect-form">
                   <label class="field" for="connect-token">
-                    <span>Splitwise access token</span>
-                    <input id="connect-token" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a Splitwise token">
-                    <small>A pasted token is never written to WaySplit’s database, browser storage, or audit log.</small>
+                    <span>Splitwise personal API key</span>
+                    <input id="connect-token" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your personal API key">
+                    <small>This key is never written to WaySplit’s database, browser storage, or audit log.</small>
                   </label>
                   <label class="check-field connect-terms">
                     <input id="connect-terms" type="checkbox" required>
                     <span>I accept the <a href="https://dev.splitwise.com/" target="_blank" rel="noopener noreferrer">Splitwise API terms</a>, understand <a href="/privacy" target="_blank" rel="noopener noreferrer">WaySplit’s local privacy policy</a>, and have obtained explicit consent from every affected Splitwise user.</span>
                   </label>
-                  <button id="connect-splitwise" class="secondary-button" type="button">Connect account</button>
+                  <button id="connect-splitwise" class="secondary-button" type="button">Find my account and members</button>
                 </div>
                 <div id="splitwise-connect-state" class="dialog-state" role="status" aria-live="polite"></div>
                 <div id="splitwise-context" class="splitwise-context" hidden>
@@ -214,9 +219,9 @@
                 </select>
               </label>
               <label class="field">
-                <span>Splitwise group ID</span>
+                <span>Splitwise group ID <small>(filled automatically after connection)</small></span>
                 <input id="group-id" name="splitwise_group_id" type="number" min="0" step="1" inputmode="numeric" placeholder="0 for no group">
-                <small>Leave blank until you are ready to preview.</small>
+                <small>Leave blank if you connected Splitwise above.</small>
               </label>
               <button id="save-household" class="primary-button" type="submit">Save household</button>
             </div>

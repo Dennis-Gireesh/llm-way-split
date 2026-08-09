@@ -8,7 +8,7 @@ and prepares a Splitwise expense for explicit approval.
 Open the browser app at `http://127.0.0.1:9876`. There is no cloud-model
 fallback, no analytics, and no automatic external posting.
 
-> **Release status:** `v0.1.8` is an operational, production-minded alpha for a
+> **Release status:** `v0.1.9` is an operational, production-minded alpha for a
 > single operator on a trusted Mac or Linux host. The full browser-to-Splitwise
 > flow ships, but model extraction can still be wrong even when totals match.
 > Review every charge and allocation before posting.
@@ -163,10 +163,21 @@ docker compose --profile ollama down
    A verified, unverified, failed, or ambiguous result is persisted explicitly.
    Only an app-created expense with a recorded remote ID can be rolled back.
 
-The browser can optionally use a Splitwise token once to load group/member names
-and IDs. A pasted token exists only in the current tab's JavaScript memory; it is
-not written to browser storage, SQLite, the audit chain, or a response. Manual ID
-entry remains available.
+To connect Splitwise, open the **Connect Splitwise to fill IDs** card in the
+household section:
+
+1. Open [Splitwise developer apps](https://secure.splitwise.com/apps) and sign in.
+2. Open your personal app and copy its API key.
+3. Paste it into WaySplit and choose **Find my account and members**.
+4. Choose your Splitwise group, review the suggested member matches, and choose
+   **Apply selected IDs**.
+5. Save the household. The key remains only in the current browser tab.
+
+Splitwise also documents OAuth 2 authorization-code integration, but it requires
+registering an app, a client key/secret, and a callback URL; it is not a universal
+one-click login for an arbitrary self-hosted install. The personal API key path is
+the supported simple setup here. The key is not written to browser storage,
+SQLite, the audit chain, or a response. Manual ID entry remains available.
 
 ## What leaves the host
 
