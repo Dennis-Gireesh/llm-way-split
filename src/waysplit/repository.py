@@ -189,10 +189,10 @@ class Repository:
 
                 CREATE UNIQUE INDEX IF NOT EXISTS runs_logical_fingerprint_unique
                     ON runs(logical_fingerprint)
-                    WHERE logical_fingerprint IS NOT NULL;
+                    WHERE logical_fingerprint IS NOT NULL AND status != 'blocked';
                 CREATE UNIQUE INDEX IF NOT EXISTS runs_source_sha256_active_unique
                     ON runs(source_sha256)
-                    WHERE status != 'failed';
+                    WHERE status NOT IN ('failed', 'blocked');
                 CREATE INDEX IF NOT EXISTS runs_created_at_index ON runs(created_at DESC);
 
                 CREATE TABLE IF NOT EXISTS confirmations (
@@ -233,10 +233,31 @@ class Repository:
                 (utc_now(),),
             )
             self._migrate_source_hash_index()
+            self._refresh_retry_indexes()
             self._connection.execute(
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
                 (SCHEMA_VERSION, utc_now()),
             )
+
+    def _refresh_retry_indexes(self) -> None:
+        """Allow safe re-extraction of blocked runs while preserving active dedupe."""
+
+        self._connection.execute("DROP INDEX IF EXISTS runs_logical_fingerprint_unique")
+        self._connection.execute("DROP INDEX IF EXISTS runs_source_sha256_active_unique")
+        self._connection.execute(
+            """
+            CREATE UNIQUE INDEX runs_logical_fingerprint_unique
+                ON runs(logical_fingerprint)
+                WHERE logical_fingerprint IS NOT NULL AND status != 'blocked'
+            """
+        )
+        self._connection.execute(
+            """
+            CREATE UNIQUE INDEX runs_source_sha256_active_unique
+                ON runs(source_sha256)
+                WHERE status NOT IN ('failed', 'blocked')
+            """
+        )
 
     def _migrate_source_hash_index(self) -> None:
         """Replace the pre-release global source hash constraint with an active-run index."""
@@ -288,14 +309,14 @@ class Repository:
                 """
                 CREATE UNIQUE INDEX runs_logical_fingerprint_unique
                     ON runs(logical_fingerprint)
-                    WHERE logical_fingerprint IS NOT NULL
+                    WHERE logical_fingerprint IS NOT NULL AND status != 'blocked'
                 """
             )
             self._connection.execute(
                 """
                 CREATE UNIQUE INDEX runs_source_sha256_active_unique
                     ON runs(source_sha256)
-                    WHERE status != 'failed'
+                    WHERE status NOT IN ('failed', 'blocked')
                 """
             )
             self._connection.execute("CREATE INDEX runs_created_at_index ON runs(created_at DESC)")
@@ -477,7 +498,7 @@ class Repository:
             existing = self._connection.execute(
                 """
                 SELECT id FROM runs
-                WHERE source_sha256 = ? AND status != 'failed'
+                WHERE source_sha256 = ? AND status NOT IN ('failed', 'blocked')
                 ORDER BY created_at DESC LIMIT 1
                 """,
                 (source_sha256,),

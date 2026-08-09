@@ -3,6 +3,11 @@
 This file records user-visible and trust-boundary changes for each immutable
 release. Dates use UTC.
 
+## 0.1.6 — 2026-08-09
+
+Blocked statements can now be safely re-uploaded for another local extraction
+attempt. Active, completed, and posted statements remain duplicate-protected.
+
 ## 0.1.5 — 2026-08-09
 
 Strengthened local bill extraction guidance to avoid counting subtotals and
