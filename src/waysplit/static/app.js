@@ -206,6 +206,10 @@
       "review-content",
       "statement-meta",
       "reconciliation-verdict",
+      "whatsapp-summary",
+      "whatsapp-summary-copy",
+      "whatsapp-summary-text",
+      "copy-whatsapp-summary",
       "balance-equation",
       "line-equation",
       "gate-panel",
@@ -332,6 +336,7 @@
     });
     refs["save-bill-json"].addEventListener("click", saveBillCorrection);
     refs["build-preview"].addEventListener("click", buildPreview);
+    refs["copy-whatsapp-summary"].addEventListener("click", copyWhatsAppSummary);
     refs["open-confirmation"].addEventListener("click", openConfirmation);
     refs["confirmation-form"].addEventListener("submit", postConfirmedPreview);
     refs["rollback-form"].addEventListener("submit", rollbackPosting);
@@ -1286,6 +1291,7 @@
         setText(heading, "No extracted statement yet");
         setText(copy, "Select a ready local model and upload a statement to begin.");
       }
+      renderWhatsAppSummary();
       renderPreview();
       updateWorkflow();
       return;
@@ -1309,6 +1315,7 @@
       refs["bill-json"].value = JSON.stringify(run.bill, null, 2);
       setText(refs["json-editor-state"], "Strict schema validation applies.");
     }
+    renderWhatsAppSummary();
     renderPreview();
     updateWorkflow();
   }
@@ -1406,6 +1413,55 @@
     } else {
       refs["reconciliation-verdict"].removeAttribute("title");
     }
+  }
+
+  function renderWhatsAppSummary() {
+    const run = state.activeRun;
+    const panel = refs["whatsapp-summary"];
+    if (!run || !run.bill) {
+      panel.hidden = true;
+      return;
+    }
+    panel.hidden = false;
+    const preview = run.preview;
+    if (!preview || !Array.isArray(preview.shares) || !preview.shares.length) {
+      refs["whatsapp-summary-text"].value = "";
+      refs["copy-whatsapp-summary"].disabled = true;
+      setText(refs["whatsapp-summary-copy"], "Build a passing preview to create the exact message.");
+      return;
+    }
+    const bill = run.bill;
+    const statement = bill.statement || {};
+    const currency = preview.currency_code || bill.account?.currency || "USD";
+    const period = statement.period_start && statement.period_end
+      ? `${formatDate(statement.period_start)} – ${formatDate(statement.period_end)}`
+      : `Issued ${formatDate(statement.issued_on)}`;
+    const lines = [
+      "📱 Mobile bill split",
+      `Billing cycle: ${period}`,
+      `Total bill: ${formatMoney(preview.cost, currency)}`,
+      "",
+      "Breakdown:",
+      ...preview.shares.map((share) => `${share.participant_name || share.participant_id}: ${formatMoney(share.owed_share, currency)}`),
+      "",
+      "Please check your amount against the statement.",
+    ];
+    refs["whatsapp-summary-text"].value = lines.join("\n");
+    refs["copy-whatsapp-summary"].disabled = false;
+    setText(refs["whatsapp-summary-copy"], "Generated from the reviewed deterministic preview. It is not sent automatically.");
+  }
+
+  async function copyWhatsAppSummary() {
+    const value = refs["whatsapp-summary-text"].value;
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch (_error) {
+      refs["whatsapp-summary-text"].focus();
+      refs["whatsapp-summary-text"].select();
+      document.execCommand("copy");
+    }
+    toast("WhatsApp message copied.", "success");
   }
 
   function renderGate() {

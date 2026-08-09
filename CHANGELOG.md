@@ -3,6 +3,12 @@
 This file records user-visible and trust-boundary changes for each immutable
 release. Dates use UTC.
 
+## 0.1.4 — 2026-08-09
+
+Added a deterministic, copy-ready WhatsApp bill summary to the extraction and
+reconciliation step. It includes the billing cycle, total, and each person’s
+allocated amount, and is never sent automatically.
+
 ## 0.1.3 — 2026-08-09
 
 Raised the default statement page limit from 24 to 60 so ordinary multi-page

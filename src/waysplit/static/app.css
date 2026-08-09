@@ -1312,6 +1312,39 @@ textarea {
     #183d35;
 }
 
+.whatsapp-summary {
+  margin: 24px 0;
+  padding: 20px;
+  border: 1px solid rgba(36, 104, 216, 0.24);
+  border-radius: 16px;
+  background: rgba(239, 246, 255, 0.72);
+}
+
+.whatsapp-summary-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+.whatsapp-summary-heading h3 {
+  margin: 3px 0 5px;
+}
+
+.whatsapp-summary-text {
+  display: block;
+  width: 100%;
+  min-height: 150px;
+  padding: 14px;
+  border: 1px solid rgba(36, 104, 216, 0.24);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--ink);
+  font: 14px/1.55 var(--font-mono);
+  resize: vertical;
+}
+
 .board-heading {
   padding: 18px 20px 8px;
 }
