@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import re
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +48,57 @@ from waysplit.repository import (
 from waysplit.settings import Settings
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _collapse_line_table_totals(bill: NormalizedBill) -> NormalizedBill:
+    """Prefer one printed row-total per service when models expand every column."""
+
+    groups: dict[str, list[Any]] = {}
+    for charge in bill.charges:
+        if charge.scope.value == "line" and charge.service_identifier:
+            groups.setdefault(charge.service_identifier, []).append(charge)
+    if not groups or any(
+        len([charge for charge in charges if "total" in charge.description.lower()]) != 1
+        for charges in groups.values()
+    ):
+        return bill
+    selected = [
+        charge
+        for charges in groups.values()
+        for charge in charges
+        if "total" in charge.description.lower()
+    ]
+    if sum(charge.amount for charge in selected) != bill.totals.current_charges:
+        return bill
+    return bill.model_copy(update={"charges": tuple(selected)})
+
+
+def _repair_printed_summary_totals(
+    bill: NormalizedBill, document_text: str
+) -> tuple[NormalizedBill, tuple[str, ...]]:
+    """Keep prior-cycle payments from reducing a separately printed current bill."""
+
+    def printed_amount(label: str) -> Decimal | None:
+        match = re.search(rf"{label}[^$\d-]*\$?([\d,]+\.\d{{2}})", document_text, re.IGNORECASE)
+        return Decimal(match.group(1).replace(",", "")) if match else None
+
+    services_total = printed_amount(r"Total\s+services")
+    amount_due = printed_amount(r"Total\s+due")
+    if (
+        services_total is None
+        or amount_due is None
+        or services_total != bill.totals.current_charges
+        or amount_due != services_total
+        or bill.totals.payments_and_credits != -services_total
+    ):
+        return bill, ()
+    totals = bill.totals.model_copy(
+        update={"payments_and_credits": Decimal("0.00"), "amount_due": amount_due}
+    )
+    return bill.model_copy(update={"totals": totals}), (
+        "The printed Total services and Total due were used; a prior-cycle payment "
+        "was not treated as a current credit.",
+    )
 
 
 class WaySplitService:
@@ -122,6 +175,8 @@ class WaySplitService:
                 api_key=api_key,
             )
             bill = await gateway.extract_bill(document)
+            bill = _collapse_line_table_totals(bill)
+            bill, summary_warnings = _repair_printed_summary_totals(bill, document.text)
             decision = evaluate_posting_gate(bill, config=self.gate_config)
             self.repository.complete_extraction(
                 run_id,
@@ -129,7 +184,7 @@ class WaySplitService:
                 logical_fingerprint=bill_fingerprint(bill),
                 reconciliation=decision.reconciliation.model_dump(mode="json"),
                 gate=decision.model_dump(mode="json"),
-                ingestion_warnings=(*document.warnings,),
+                ingestion_warnings=(*document.warnings, *summary_warnings),
                 blocked=decision.status is PostingStatus.BLOCKED,
                 retain_source=self.settings.retain_source,
             )

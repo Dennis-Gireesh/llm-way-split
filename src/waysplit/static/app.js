@@ -1422,14 +1422,14 @@
       panel.hidden = true;
       return;
     }
-    panel.hidden = false;
     const preview = run.preview;
     if (!preview || !Array.isArray(preview.shares) || !preview.shares.length) {
+      panel.hidden = true;
       refs["whatsapp-summary-text"].value = "";
       refs["copy-whatsapp-summary"].disabled = true;
-      setText(refs["whatsapp-summary-copy"], "Build a passing preview to create the exact message.");
       return;
     }
+    panel.hidden = false;
     const bill = run.bill;
     const statement = bill.statement || {};
     const currency = preview.currency_code || bill.account?.currency || "USD";

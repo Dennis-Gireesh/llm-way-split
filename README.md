@@ -8,7 +8,7 @@ and prepares a Splitwise expense for explicit approval.
 Open the browser app at `http://127.0.0.1:9876`. There is no cloud-model
 fallback, no analytics, and no automatic external posting.
 
-> **Release status:** `v0.1.6` is an operational, production-minded alpha for a
+> **Release status:** `v0.1.8` is an operational, production-minded alpha for a
 > single operator on a trusted Mac or Linux host. The full browser-to-Splitwise
 > flow ships, but model extraction can still be wrong even when totals match.
 > Review every charge and allocation before posting.

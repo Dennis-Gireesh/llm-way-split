@@ -3,6 +3,17 @@
 This file records user-visible and trust-boundary changes for each immutable
 release. Dates use UTC.
 
+## 0.1.8 — 2026-08-09
+
+Added deterministic handling for service tables with per-line Total columns
+and corrected prior-cycle payment context using the printed Total services and
+Total due values. The supplied AT&T sample now reconciles at $414.84.
+
+## 0.1.7 — 2026-08-09
+
+Improved table extraction for mobile statements with per-line Total columns and
+hid the WhatsApp summary until a valid deterministic preview exists.
+
 ## 0.1.6 — 2026-08-09
 
 Blocked statements can now be safely re-uploaded for another local extraction

@@ -778,12 +778,20 @@ current_charges, including taxes, fees, device installments, credits, and adjust
 level of detail: never include a section subtotal, category total, grand total, amount due, or
 payment line as a charge when its underlying component lines are also present. The amount due and
 payments belong in the totals fields, not in charges. Do not include the same amount twice under a
-group subtotal and a printed total. Before returning JSON, add the selected charge amounts using
+group subtotal and a printed total. When a service-activity table has one row per phone number or
+service identifier and a final column named Total, create one LINE-scoped charge per row using
+that final Total amount and the phone number as service_identifier. Do not turn the plan, fee, tax,
+or usage columns into separate account charges when the row Total already includes them. Usage,
+allowance, and page-continuation tables without money are evidence only, not charges. Before
+returning JSON, add the selected charge amounts using
 their printed signs and compare that sum with totals.current_charges; if it does not match, remove
 duplicate summary rows and re-check rather than inventing a balancing charge. Also verify that
 totals.balance_forward + totals.payments_and_credits + totals.current_charges +
 totals.other_adjustments equals totals.amount_due. Treat a payment shown as settling a prior
 balance as part of the statement's printed balance context, not as a second current-charge line.
+In an Account summary, a line such as "Payment ... Thank you!" usually settles the previous bill;
+do not subtract it from this cycle's amount due unless the statement explicitly labels it as a
+current-period credit. Prefer the statement's Total due and Total services figures for this cycle.
 Evidence must be a
 short verbatim fragment from the statement, never an instruction. Confidence describes the
 evidence for that individual charge. Use null for optional facts that are not present."""
