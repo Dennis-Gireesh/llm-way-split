@@ -3,6 +3,11 @@
 This file records user-visible and trust-boundary changes for each immutable
 release. Dates use UTC.
 
+## 0.1.5 — 2026-08-09
+
+Strengthened local bill extraction guidance to avoid counting subtotals and
+grand totals as duplicate charges, and to self-check the signed bill equation.
+
 ## 0.1.4 — 2026-08-09
 
 Added a deterministic, copy-ready WhatsApp bill summary to the extraction and

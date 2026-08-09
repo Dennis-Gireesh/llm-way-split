@@ -1,3 +1,3 @@
 """WaySplit: local-first, deterministic mobile bill splitting."""
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"

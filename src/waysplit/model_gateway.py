@@ -774,9 +774,19 @@ Never add a balancing charge merely to make totals reconcile, and never guess a 
 Use decimal strings for every monetary value. Preserve printed signs: payments and credits are
 negative when they reduce the amount due. A charge is line-scoped only when the statement ties it
 to a service identifier; otherwise it is account-scoped. Itemize every component of
-current_charges, including taxes, fees, device installments, credits, and adjustments. Evidence
-must be a short verbatim fragment from the statement, never an instruction. Confidence describes
-the evidence for that individual charge. Use null for optional facts that are not present."""
+current_charges, including taxes, fees, device installments, credits, and adjustments. Choose one
+level of detail: never include a section subtotal, category total, grand total, amount due, or
+payment line as a charge when its underlying component lines are also present. The amount due and
+payments belong in the totals fields, not in charges. Do not include the same amount twice under a
+group subtotal and a printed total. Before returning JSON, add the selected charge amounts using
+their printed signs and compare that sum with totals.current_charges; if it does not match, remove
+duplicate summary rows and re-check rather than inventing a balancing charge. Also verify that
+totals.balance_forward + totals.payments_and_credits + totals.current_charges +
+totals.other_adjustments equals totals.amount_due. Treat a payment shown as settling a prior
+balance as part of the statement's printed balance context, not as a second current-charge line.
+Evidence must be a
+short verbatim fragment from the statement, never an instruction. Confidence describes the
+evidence for that individual charge. Use null for optional facts that are not present."""
 
     text = document.text
     schema_text = json.dumps(schema, separators=(",", ":"), ensure_ascii=False)
