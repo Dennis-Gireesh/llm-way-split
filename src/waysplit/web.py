@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import logging
 import secrets
 import threading
 import time
@@ -19,13 +18,12 @@ from fastapi import (
     File,
     Form,
     Request,
-    Response,
     UploadFile,
     status,
 )
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field
@@ -54,14 +52,11 @@ from waysplit.repository import PostingRecord, Repository, RunRecord
 from waysplit.service import WaySplitService
 from waysplit.settings import Settings, load_settings
 
-LOGGER = logging.getLogger(__name__)
 PACKAGE_ROOT = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=PACKAGE_ROOT / "templates")
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 PROBE_ATTESTATION_TTL_SECONDS = 10 * 60
 MAX_PROBE_ATTESTATIONS = 128
-BROWSER_SESSION_TTL_SECONDS = 8 * 60 * 60
-MAX_BROWSER_SESSIONS = 32
 
 
 class ApiModel(BaseModel):
@@ -186,38 +181,6 @@ class ProbeAttestationStore:
             self._records.pop(token, None)
 
 
-class BrowserSessionStore:
-    """Small in-memory session set unlocked by an out-of-band startup secret."""
-
-    def __init__(self) -> None:
-        self._records: dict[str, float] = {}
-        self._lock = threading.Lock()
-
-    def issue(self) -> str:
-        token = secrets.token_urlsafe(32)
-        now = time.monotonic()
-        with self._lock:
-            self._remove_expired(now)
-            while len(self._records) >= MAX_BROWSER_SESSIONS:
-                oldest = min(self._records.items(), key=lambda item: item[1])[0]
-                self._records.pop(oldest, None)
-            self._records[token] = now + BROWSER_SESSION_TTL_SECONDS
-        return token
-
-    def valid(self, token: str | None) -> bool:
-        if not token:
-            return False
-        now = time.monotonic()
-        with self._lock:
-            self._remove_expired(now)
-            expiry = self._records.get(token)
-        return expiry is not None and expiry > now
-
-    def _remove_expired(self, now: float) -> None:
-        for token in [key for key, expiry in self._records.items() if expiry <= now]:
-            self._records.pop(token, None)
-
-
 def _session_digest(session_token: str) -> str:
     return hashlib.sha256(session_token.encode("utf-8")).hexdigest()
 
@@ -230,18 +193,6 @@ def create_app(
     runtime_settings = settings or load_settings()
     owns_repository = repository is None
     probe_attestations = ProbeAttestationStore()
-    browser_sessions = BrowserSessionStore()
-    configured_browser_token = runtime_settings.browser_access_token
-    browser_unlock_token = (
-        configured_browser_token.get_secret_value()
-        if configured_browser_token
-        else secrets.token_urlsafe(32)
-    )
-    if configured_browser_token is None:
-        LOGGER.warning(
-            "Browser unlock token (keep private; restart to rotate): %s",
-            browser_unlock_token,
-        )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -275,18 +226,6 @@ def create_app(
 
     @app.middleware("http")
     async def browser_safety(request: Request, call_next: Any) -> Any:
-        if (
-            request.url.path.startswith("/api/")
-            and request.url.path != "/api/health"
-            and not browser_sessions.valid(request.cookies.get("waysplit_auth"))
-        ):
-            return JSONResponse(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                content={
-                    "error": "browser_locked",
-                    "message": "Unlock this browser from the WaySplit start page.",
-                },
-            )
         if request.method == "POST" and request.url.path == "/api/runs":
             raw_length = request.headers.get("content-length")
             try:
@@ -422,13 +361,6 @@ def create_app(
 
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request) -> HTMLResponse:
-        if not browser_sessions.valid(request.cookies.get("waysplit_auth")):
-            return TEMPLATES.TemplateResponse(
-                request=request,
-                name="unlock.html",
-                context={"version": __version__, "invalid": False},
-                status_code=status.HTTP_401_UNAUTHORIZED,
-            )
         csrf_token = request.cookies.get("waysplit_csrf") or secrets.token_urlsafe(32)
         response = TEMPLATES.TemplateResponse(
             request=request,
@@ -442,30 +374,6 @@ def create_app(
             secure=False,
             samesite="strict",
             max_age=8 * 60 * 60,
-            path="/",
-        )
-        return response
-
-    @app.post("/unlock", response_class=HTMLResponse)
-    async def unlock(
-        request: Request,
-        access_token: Annotated[str, Form(min_length=32, max_length=500)],
-    ) -> Response:
-        if not secrets.compare_digest(access_token, browser_unlock_token):
-            return TEMPLATES.TemplateResponse(
-                request=request,
-                name="unlock.html",
-                context={"version": __version__, "invalid": True},
-                status_code=status.HTTP_401_UNAUTHORIZED,
-            )
-        response = RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
-        response.set_cookie(
-            "waysplit_auth",
-            browser_sessions.issue(),
-            httponly=True,
-            secure=False,
-            samesite="strict",
-            max_age=BROWSER_SESSION_TTL_SECONDS,
             path="/",
         )
         return response

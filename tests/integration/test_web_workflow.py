@@ -26,8 +26,6 @@ from waysplit.service import WaySplitService
 from waysplit.settings import Settings
 from waysplit.web import create_app
 
-BROWSER_TOKEN = "synthetic-browser-access-token-0123456789"
-
 
 @pytest.fixture
 def web_client(
@@ -39,18 +37,10 @@ def web_client(
         max_upload_mib=1,
         model_endpoints=("http://127.0.0.1:11434",),
         allowed_origins=("http://127.0.0.1:9876",),
-        browser_access_token=SecretStr(BROWSER_TOKEN),
     )
     app = create_app(settings=settings, repository=repository)
     with TestClient(app) as client:
-        _unlock_browser(client)
         yield client
-
-
-def _unlock_browser(client: TestClient) -> None:
-    response = client.post("/unlock", data={"access_token": BROWSER_TOKEN})
-    assert response.status_code == 200
-    assert client.cookies.get("waysplit_auth")
 
 
 def _csrf_headers(client: TestClient) -> dict[str, str]:
@@ -177,27 +167,21 @@ def test_browser_entrypoint_and_health_are_local_safe(web_client: TestClient) ->
     assert health.headers["cache-control"] == "no-store"
 
 
-def test_browser_api_is_closed_until_out_of_band_unlock(
+def test_browser_api_is_available_without_unlock(
     repository: Repository,
     tmp_path: Path,
 ) -> None:
     settings = Settings(
         data_dir=tmp_path / "locked-app",
-        browser_access_token=SecretStr(BROWSER_TOKEN),
     )
     with TestClient(create_app(settings=settings, repository=repository)) as client:
-        locked_page = client.get("/")
-        locked_api = client.get("/api/runs")
-        wrong_unlock = client.post("/unlock", data={"access_token": "x" * 32})
-        _unlock_browser(client)
-        unlocked_api = client.get("/api/runs")
+        page = client.get("/")
+        api = client.get("/api/runs")
+        unlock_route = client.post("/unlock", data={"access_token": "ignored"})
 
-    assert locked_page.status_code == 401
-    assert "Unlock this browser" in locked_page.text
-    assert locked_api.status_code == 401
-    assert locked_api.json()["error"] == "browser_locked"
-    assert wrong_unlock.status_code == 401
-    assert unlocked_api.status_code == 200
+    assert page.status_code == 200
+    assert api.status_code == 200
+    assert unlock_route.status_code == 404
 
 
 def test_unsafe_api_requests_require_matching_csrf_and_allowed_origin(
@@ -301,11 +285,9 @@ def test_browser_model_discovery_uses_configured_credential(
         model_endpoints=("http://127.0.0.1:9090/v1/",),
         model_api_key=SecretStr("configured-model-secret"),
         allowed_origins=("http://127.0.0.1:9876",),
-        browser_access_token=SecretStr(BROWSER_TOKEN),
     )
 
     with TestClient(create_app(settings=settings, repository=repository)) as client:
-        _unlock_browser(client)
         response = client.get("/api/models")
 
     assert response.status_code == 200
@@ -329,10 +311,8 @@ def test_probe_rejects_unconfigured_endpoint_before_resolving_model_credential(
         model_endpoints=("http://127.0.0.1:11434",),
         model_api_key=SecretStr("configured-model-secret"),
         allowed_origins=("http://127.0.0.1:9876",),
-        browser_access_token=SecretStr(BROWSER_TOKEN),
     )
     with TestClient(create_app(settings=settings, repository=repository)) as client:
-        _unlock_browser(client)
         headers = _csrf_headers(client)
         response = client.post(
             "/api/models/probe",

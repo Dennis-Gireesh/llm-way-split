@@ -120,19 +120,10 @@ def test_application_configuration_rejects_remote_model_mode() -> None:
         Settings(allow_remote_model_endpoints=True)
 
 
-@pytest.mark.parametrize(
-    "token",
-    [
-        "too-short",
-        " a-valid-length-token-that-has-leading-space",
-        "a-valid-length-token-that-has-trailing-space ",
-    ],
-)
-def test_browser_access_token_requires_a_strong_unambiguous_value(token: str) -> None:
-    from pydantic import SecretStr
-
-    with pytest.raises(ValueError, match="32 to 500"):
-        Settings(browser_access_token=SecretStr(token))
+def test_legacy_browser_access_token_is_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("WAYSPLIT_BROWSER_ACCESS_TOKEN", "old-token-no-longer-used")
+    settings = load_settings()
+    assert not hasattr(settings, "browser_access_token")
 
 
 @pytest.mark.parametrize(

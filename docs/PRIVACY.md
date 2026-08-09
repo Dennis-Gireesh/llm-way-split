@@ -84,9 +84,12 @@ Container registries, package indexes, operating-system updates, model downloads
 
 ## Credentials
 
-Splitwise tokens and any future destination credentials are secrets. In `0.1.0`, a Splitwise token can be supplied only through the unlocked browser for the current tab/request; server-side Splitwise credentials are deliberately unsupported so an untrusted parser/model peer cannot drive a destination side effect. Tokens must be excluded from Git and images, hidden from later UI responses, and redacted from logs/errors. The project should prefer narrow scopes when providers make them available.
-
-The browser-unlock secret is separate from destination credentials. When it is generated automatically, it is printed once to the local terminal/container log so the operator can unlock the browser. Treat that startup output as sensitive, restrict log access, and restart WaySplit to rotate the generated value. The secret is never placed in a URL; a successful unlock exchanges it for an eight-hour HttpOnly session cookie.
+Splitwise tokens and any future destination credentials are secrets. In `0.1.1`,
+a Splitwise token can be supplied only through the current browser tab/request;
+server-side Splitwise credentials are deliberately unsupported. Tokens must be
+excluded from Git and images, hidden from later UI responses, and redacted from
+logs/errors. There is no browser password or unlock token: keep the loopback
+service private because anyone who can reach it can use it.
 
 If a credential is exposed, revoke or rotate it at the provider, review remote activity, replace the local value, and treat logs/backups containing it as compromised. Encryption at rest may reduce exposure from a stolen disk but does not protect a secret while the running application is using it.
 

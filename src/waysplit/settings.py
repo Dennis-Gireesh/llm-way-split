@@ -23,7 +23,6 @@ class Settings(BaseModel):
     host: str = "127.0.0.1"
     port: int = Field(default=9876, ge=1, le=65535)
     data_dir: Path = Path("./data")
-    browser_access_token: SecretStr | None = None
     retain_source: bool = False
     max_upload_mib: int = Field(default=25, ge=1, le=250)
     max_pages: int = Field(default=24, ge=1, le=100)
@@ -57,18 +56,6 @@ class Settings(BaseModel):
         if value:
             raise ValueError("remote model endpoints are not supported in WaySplit 0.1")
         return False
-
-    @field_validator("browser_access_token")
-    @classmethod
-    def validate_browser_access_token(cls, value: SecretStr | None) -> SecretStr | None:
-        if value is None:
-            return None
-        token = value.get_secret_value()
-        if token != token.strip() or not 32 <= len(token) <= 500:
-            raise ValueError(
-                "browser access token must be 32 to 500 characters with no surrounding whitespace"
-            )
-        return value
 
     @field_validator("log_level")
     @classmethod
@@ -195,10 +182,6 @@ def load_settings(config_path: Path | None = None) -> Settings:
         "WAYSPLIT_HOST": ("host", str),
         "WAYSPLIT_PORT": ("port", int),
         "WAYSPLIT_DATA_DIR": ("data_dir", Path),
-        "WAYSPLIT_BROWSER_ACCESS_TOKEN": (
-            "browser_access_token",
-            lambda item: SecretStr(item) if item else None,
-        ),
         "WAYSPLIT_RETAIN_SOURCE": ("retain_source", _as_bool),
         "WAYSPLIT_MAX_UPLOAD_MIB": ("max_upload_mib", int),
         "WAYSPLIT_MAX_PAGES": ("max_pages", int),
@@ -221,7 +204,9 @@ def load_settings(config_path: Path | None = None) -> Settings:
     unknown_environment = sorted(
         name
         for name in environment
-        if name.startswith("WAYSPLIT_") and name not in env_mapping and name != "WAYSPLIT_CONFIG"
+        if name.startswith("WAYSPLIT_")
+        and name not in env_mapping
+        and name not in {"WAYSPLIT_CONFIG", "WAYSPLIT_BROWSER_ACCESS_TOKEN"}
     )
     if unknown_environment:
         raise ValueError(f"unknown WaySplit environment settings: {unknown_environment}")

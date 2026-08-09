@@ -49,8 +49,8 @@ All stages record minimized run and audit state in SQLite.
 ### Operator interfaces
 
 The web interface listens on port `9876` in the container and binds to host
-loopback by default. An out-of-band startup token unlocks a bounded, HttpOnly
-single-operator browser session; origin and CSRF controls remain separate. The
+loopback by default. Version `0.1.1` opens directly without a browser password;
+origin and CSRF controls remain request-forgery defenses, not authentication. The
 interface provides setup, model readiness, upload, extraction review,
 ownership/rule configuration, allocation preview, reconciliation status,
 confirmation, posting status, and audit history. Opening the app must not send a

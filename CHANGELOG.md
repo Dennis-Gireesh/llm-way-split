@@ -3,6 +3,16 @@
 This file records user-visible and trust-boundary changes for each immutable
 release. Dates use UTC.
 
+## 0.1.1 — 2026-08-09
+
+Simplified trusted-local launch.
+
+- Removed the browser password/unlock-token screen; the launcher opens the app
+  directly on loopback.
+- Added a visible first-run guide in the browser and a one-click Mac launcher.
+- Kept legacy `WAYSPLIT_BROWSER_ACCESS_TOKEN` values harmlessly ignored for
+  upgrades, while documenting that the local port is not authenticated.
+
 ## 0.1.0 — 2026-08-09
 
 Initial public release.

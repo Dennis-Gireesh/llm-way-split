@@ -8,7 +8,7 @@ and prepares a Splitwise expense for explicit approval.
 Open the browser app at `http://127.0.0.1:9876`. There is no cloud-model
 fallback, no analytics, and no automatic external posting.
 
-> **Release status:** `v0.1.0` is an operational, production-minded alpha for a
+> **Release status:** `v0.1.1` is an operational, production-minded alpha for a
 > single operator on a trusted Mac or Linux host. The full browser-to-Splitwise
 > flow ships, but model extraction can still be wrong even when totals match.
 > Review every charge and allocation before posting.
@@ -21,9 +21,30 @@ fallback, no analytics, and no automatic external posting.
 > security principal for the parser. Do not treat WaySplit as safe for anonymous or
 > adversarial uploads; see the [threat model](docs/THREAT_MODEL.md).
 
+## Start here (no command-line knowledge needed)
+
+On a Mac, install and open [Docker Desktop](https://www.docker.com/products/docker-desktop/),
+then double-click `start.command` in this folder. On Linux, open a terminal in
+this folder and run `./start.sh`. The launcher downloads the verified WaySplit
+image, starts the local service, and opens `http://127.0.0.1:9876` for you.
+There is no password or copy-token step: this release is designed for a
+trusted computer and binds to local loopback by default. Then follow the five
+numbered sections in the browser:
+
+1. Choose a local model and run the fictional readiness test.
+2. Add the people on the bill, choose the payer, and save the household.
+3. Drop in the monthly PDF or image and choose **Extract statement**.
+4. Read every charge and wait for both reconciliation checks to pass.
+5. Build the preview. Only if you choose Splitwise, connect it and confirm the
+   exact expense shown on screen.
+
+The first four steps never contact Splitwise. To stop the local service, run
+`docker compose stop waysplit`. To start it again, double-click `start.command`
+or run `./start.sh`.
+
 ## The trust contract
 
-- Statement processing is local. Version `0.1.0` rejects remote model mode;
+- Statement processing is local. Version `0.1.1` rejects remote model mode;
   configured endpoints must resolve through an approved local/container name.
 - The model may extract and classify facts. It never performs authoritative
   money arithmetic, chooses recipients, receives a Splitwise token, or posts.
@@ -84,16 +105,8 @@ cd llm-way-split
 docker compose up --build --detach waysplit
 ```
 
-Read the startup output once to obtain the generated browser unlock token:
-
-```bash
-docker compose logs waysplit
-```
-
-Open <http://127.0.0.1:9876>, paste that token into the unlock screen, and keep
-the container log private. The token is exchanged for an eight-hour HttpOnly
-browser session and rotates on restart unless `WAYSPLIT_BROWSER_ACCESS_TOKEN`
-is set explicitly. The first workspace screen discovers configured local model
+Open <http://127.0.0.1:9876> directly. There is no browser unlock screen. The
+first workspace screen discovers configured local model
 endpoints. Choose a model and run the statement-free readiness test before an
 upload is enabled.
 
@@ -200,7 +213,6 @@ YAML. Common settings are:
 | `WAYSPLIT_HOST` | `127.0.0.1` | Loopback bind outside Docker |
 | `WAYSPLIT_PORT` | `9876` | Browser service port |
 | `WAYSPLIT_DATA_DIR` | `./data` | SQLite and temporary upload location |
-| `WAYSPLIT_BROWSER_ACCESS_TOKEN` | generated at startup | Out-of-band browser unlock secret |
 | `WAYSPLIT_MODEL_ENDPOINTS` | local well-known endpoints | Comma-separated approved model APIs |
 | `WAYSPLIT_MODEL_TIMEOUT_SECONDS` | `300` | Model request timeout |
 | `WAYSPLIT_RETAIN_SOURCE` | `false` | Keep the original statement after extraction |
@@ -222,14 +234,13 @@ reduce exposure, but this alpha does not ship a seccomp policy, network namespac
 macOS Seatbelt profile, or separate parser user. Treat the boundary as crash and
 resource isolation—not containment of arbitrary code execution.
 
-Do not expose WaySplit directly to the Internet. Version `0.1.0` has a
-single-operator browser unlock secret, HttpOnly session, origin validation, and
-CSRF protection; it is not a multi-user identity system. Model services and
-parser workers cannot mint a browser session without that out-of-band token.
-Splitwise credentials are accepted only from the unlocked browser for the
-current tab/request and cannot be configured server-side. If LAN access is
-required, place WaySplit behind authenticated TLS and review the deployment
-boundary deliberately.
+Do not expose WaySplit directly to the Internet. Version `0.1.1` has no browser
+login; origin validation and CSRF protection defend against cross-site requests,
+not against a process or person that can reach the port. Keep it on loopback or
+place it behind authenticated TLS before any non-loopback deployment.
+Splitwise credentials are accepted only from the current browser tab/request
+and cannot be configured server-side. If LAN access is required, place WaySplit
+behind authenticated TLS and review the deployment boundary deliberately.
 
 ## Native installation
 
@@ -241,9 +252,6 @@ uv sync --frozen --all-extras
 uv run waysplit doctor
 uv run waysplit serve
 ```
-
-The terminal prints a one-time startup unlock token when a stable token is not
-configured. Paste it into the browser; do not put it in a URL or issue report.
 
 The CLI also provides `waysplit audit-verify` and `waysplit version`. It does
 not expose a posting bypass.

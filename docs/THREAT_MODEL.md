@@ -164,12 +164,11 @@ Rollback of application code does not reverse a Splitwise expense. External reve
 ### Authentication, request forgery, and exposed services
 
 The browser interface is intended for an operator-controlled host. Version `0.1.0`
-requires an out-of-band browser unlock token, exchanges it for a bounded HttpOnly
-session, and retains separate origin/CSRF checks. That barrier keeps an untrusted
-local model or parser process from simply minting its own browser session, but it
-is not a multi-user identity system, rate limiter, or substitute for TLS. If the
-unlock token or session is exposed, another reachable machine could read
-statements or trigger processing and confirmation flows.
+opens directly on the trusted local host and retains separate origin/CSRF checks.
+Those checks defend against cross-site requests, not against a local process or
+another machine that can reach the port. The service is therefore not a
+multi-user identity system, rate limiter, or substitute for TLS. Keep it bound
+to loopback; add authenticated TLS before any non-loopback deployment.
 
 Required controls for any non-loopback deployment:
 

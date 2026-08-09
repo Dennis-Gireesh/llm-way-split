@@ -37,7 +37,7 @@
 
       <section>
         <h2>Credentials and telemetry</h2>
-        <p>A Splitwise token pasted into the browser is kept only in that tab’s memory and sent to the local service for the requested connection, post, or rollback. It is not written to browser storage, SQLite, or the audit ledger; server-side destination credentials are unsupported. The separate browser-unlock secret is exchanged for an eight-hour HttpOnly session and must be protected in startup logs. WaySplit {{ version }} sends no maintainer analytics or crash reports.</p>
+        <p>A Splitwise token pasted into the browser is kept only in that tab’s memory and sent to the local service for the requested connection, post, or rollback. It is not written to browser storage, SQLite, or the audit ledger; server-side destination credentials are unsupported. There is no browser password or unlock token in this release: keep the loopback service private because anyone who can reach it can use it. WaySplit {{ version }} sends no maintainer analytics or crash reports.</p>
       </section>
 
       <section>
