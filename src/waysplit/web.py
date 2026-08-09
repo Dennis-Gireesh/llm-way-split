@@ -471,6 +471,13 @@ def create_app(
 
     @app.put("/api/household")
     async def put_household(request: Request, config: HouseholdConfig) -> dict[str, Any]:
+        if config.output_destination == "local_summary":
+            config = config.model_copy(
+                update={
+                    "payer_participant_id": None,
+                    "splitwise_group_id": None,
+                }
+            )
         _repo(request).save_household(config.json_safe())
         return {"household": config.json_safe()}
 
@@ -563,6 +570,13 @@ def create_app(
     async def create_preview(
         request: Request, run_id: str, household: HouseholdConfig
     ) -> dict[str, Any]:
+        if household.output_destination == "local_summary":
+            household = household.model_copy(
+                update={
+                    "payer_participant_id": None,
+                    "splitwise_group_id": None,
+                }
+            )
         run = _service(request).create_preview(run_id, household)
         return {"run": _run_json(_repo(request), run)}
 
