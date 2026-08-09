@@ -3,6 +3,11 @@
 This file records user-visible and trust-boundary changes for each immutable
 release. Dates use UTC.
 
+## 0.1.2 — 2026-08-09
+
+Launcher correction: fresh installs now pull the password-free `v0.1.1`
+image by default.
+
 ## 0.1.1 — 2026-08-09
 
 Simplified trusted-local launch.
