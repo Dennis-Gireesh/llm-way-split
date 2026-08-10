@@ -25,7 +25,7 @@ fi
 # Keep the release reproducible while allowing an existing .env to hold local
 # model settings. The browser unlock/password setting is intentionally unused.
 if [[ ! -f .env ]]; then
-  printf '%s\n' 'WAYSPLIT_IMAGE=ghcr.io/dennis-gireesh/llm-way-split:v0.1.16' > .env
+  printf '%s\n' 'WAYSPLIT_IMAGE=ghcr.io/dennis-gireesh/llm-way-split:v0.1.17' > .env
   chmod 600 .env
 fi
 
