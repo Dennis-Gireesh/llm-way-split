@@ -1156,18 +1156,23 @@
     const bill = run.bill;
     const statement = bill.statement || {};
     const currency = preview.currency_code || bill.account?.currency || "USD";
+    const issuerName = String(bill.issuer?.name || "Mobile").trim();
+    const carrier = /at&t/i.test(issuerName) ? "AT&T" : issuerName;
     const period = statement.period_start && statement.period_end
       ? `${formatDate(statement.period_start)} – ${formatDate(statement.period_end)}`
       : `Issued ${formatDate(statement.issued_on)}`;
+    const shares = preview.shares.map((share) => (
+      `${String(share.participant_name || share.participant_id).toLocaleUpperCase()} — ${formatMoney(share.owed_share, currency)}`
+    ));
     const lines = [
-      "📱 Mobile bill split",
-      `Billing cycle: ${period}`,
-      `Total bill: ${formatMoney(preview.cost, currency)}`,
+      `📱 *${carrier} Mobile Bill*`,
+      `Billing period: ${period}`,
+      `Statement total: *${formatMoney(preview.cost, currency)}*`,
       "",
-      "Breakdown:",
-      ...preview.shares.map((share) => `${share.participant_name || share.participant_id}: ${formatMoney(share.owed_share, currency)}`),
+      `*Individual amounts (${shares.length})*`,
+      ...shares,
       "",
-      "Please check your amount against the statement.",
+      "Please check your amount above for this billing cycle.",
     ];
     refs["whatsapp-summary-text"].value = lines.join("\n");
     refs["copy-whatsapp-summary"].disabled = false;
