@@ -565,12 +565,13 @@ def confirmation_plan_digest(
 ) -> str:
     """Commit to every reviewed input and the exact deterministic destination plan."""
 
-    correlation_id = posting_correlation_id(run_id, "splitwise")
-    destination_payload = (
-        build_create_payload(preview=preview, correlation_id=correlation_id)
-        if preview.postable
-        else None
-    )
+    destination_payload = None
+    if preview.destination == "splitwise" and preview.postable:
+        correlation_id = posting_correlation_id(run_id, "splitwise")
+        destination_payload = build_create_payload(
+            preview=preview,
+            correlation_id=correlation_id,
+        )
     return preview_request_digest(
         {
             "schema": "waysplit-confirmation-plan-v1",

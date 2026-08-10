@@ -18,6 +18,7 @@ from waysplit.domain.allocation import allocate_bill
 from waysplit.domain.models import NormalizedBill
 from waysplit.errors import DestinationError
 from waysplit.household import HouseholdConfig, Participant, build_expense_preview
+from waysplit.service import confirmation_plan_digest
 
 
 def _household(*, postable: bool) -> HouseholdConfig:
@@ -77,6 +78,15 @@ def test_local_summary_does_not_require_splitwise_account(normalized_bill: Norma
     assert preview.postable
     assert not preview.blockers
     assert sum((share.owed_share for share in preview.shares), Decimal("0")) == preview.cost
+    digest = confirmation_plan_digest(
+        run_id="local-summary-run",
+        bill=normalized_bill,
+        allocation=allocation.model_dump(mode="json"),
+        household=household.json_safe(),
+        gate={"status": "approved"},
+        preview=preview,
+    )
+    assert len(digest) == 64
 
 
 def _remote_expense(
