@@ -89,7 +89,8 @@ def _repair_printed_summary_totals(
         or amount_due is None
         or services_total != bill.totals.current_charges
         or amount_due != services_total
-        or bill.totals.payments_and_credits != -services_total
+        or bill.totals.balance_forward != Decimal("0.00")
+        or bill.totals.payments_and_credits >= Decimal("0.00")
     ):
         return bill, ()
     totals = bill.totals.model_copy(
@@ -98,6 +99,26 @@ def _repair_printed_summary_totals(
     return bill.model_copy(update={"totals": totals}), (
         "The printed Total services and Total due were used; a prior-cycle payment "
         "was not treated as a current credit.",
+    )
+
+
+def _ignore_prior_cycle_payment(bill: NormalizedBill) -> NormalizedBill:
+    """Correct an AT&T-style account summary that lists last month's payment.
+
+    If a statement has no carried balance and its printed amount due already equals
+    the current charges, a negative payment belongs to the prior bill. Including it
+    again makes the current statement equation fail by exactly that old payment.
+    """
+
+    totals = bill.totals
+    if (
+        totals.balance_forward != Decimal("0.00")
+        or totals.current_charges != totals.amount_due
+        or totals.payments_and_credits >= Decimal("0.00")
+    ):
+        return bill
+    return bill.model_copy(
+        update={"totals": totals.model_copy(update={"payments_and_credits": Decimal("0.00")})}
     )
 
 
@@ -230,6 +251,10 @@ class WaySplitService:
         run = self.repository.get_run(run_id)
         if run.bill is None:
             raise PostingBlockedError("Extract and review a bill before creating a preview.")
+        repaired_bill = _ignore_prior_cycle_payment(run.bill)
+        if repaired_bill != run.bill:
+            run = self.review_bill(run_id, repaired_bill)
+        assert run.bill is not None
         decision = evaluate_posting_gate(run.bill, config=self.gate_config)
         try:
             allocation = allocate_bill(run.bill, household.allocation_rules())

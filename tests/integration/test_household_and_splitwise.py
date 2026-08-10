@@ -18,7 +18,7 @@ from waysplit.domain.allocation import allocate_bill
 from waysplit.domain.models import NormalizedBill
 from waysplit.errors import DestinationError
 from waysplit.household import HouseholdConfig, Participant, build_expense_preview
-from waysplit.service import confirmation_plan_digest
+from waysplit.service import _ignore_prior_cycle_payment, confirmation_plan_digest
 
 
 def _household(*, postable: bool) -> HouseholdConfig:
@@ -87,6 +87,26 @@ def test_local_summary_does_not_require_splitwise_account(normalized_bill: Norma
         preview=preview,
     )
     assert len(digest) == 64
+
+
+def test_prior_cycle_payment_does_not_reduce_a_new_statement_total(
+    normalized_bill: NormalizedBill,
+) -> None:
+    bill = normalized_bill.model_copy(
+        update={
+            "totals": normalized_bill.totals.model_copy(
+                update={
+                    "balance_forward": Decimal("0.00"),
+                    "payments_and_credits": Decimal("-414.84"),
+                    "current_charges": Decimal("415.10"),
+                    "amount_due": Decimal("415.10"),
+                }
+            )
+        }
+    )
+    repaired = _ignore_prior_cycle_payment(bill)
+    assert repaired.totals.payments_and_credits == Decimal("0.00")
+    assert repaired.totals.current_charges == repaired.totals.amount_due
 
 
 def _remote_expense(
