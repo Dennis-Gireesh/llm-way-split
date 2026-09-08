@@ -2,7 +2,7 @@
 
 # Both images are immutable multi-platform manifests. Dependabot updates the
 # human-readable tag and digest together.
-ARG PYTHON_IMAGE="python:3.12.13-alpine3.23@sha256:601d3d3797e90e2534782e69c85fafb7971b43f24c7b1b079b7e48dd435e458d"
+ARG PYTHON_IMAGE="python:3.12.14-alpine3.23@sha256:167bc85084c9df34480efc26b4528fb68feaa8a79183b5658952137025b6f061"
 ARG UV_IMAGE="ghcr.io/astral-sh/uv:0.11.24@sha256:99ea34acedc870ba4ad11a1f540a1c04267c9f30aadc465a94406f52dfda2c36"
 
 FROM ${UV_IMAGE} AS uv-bin
@@ -46,7 +46,16 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     WAYSPLIT_DATA_DIR=/data
 
 # English OCR data is installed explicitly at exact Alpine package versions.
-RUN apk add --no-cache \
+# Upgrade Alpine packages with known HIGH/CRITICAL CVEs before adding OCR deps.
+RUN apk upgrade --no-cache \
+        giflib \
+        libblkid \
+        libmount \
+        libuuid \
+        libcrypto3 \
+        libssl3 \
+        sqlite-libs \
+    && apk add --no-cache \
         tesseract-ocr=5.5.1-r0 \
         tesseract-ocr-data-eng=5.5.1-r0 \
     && addgroup -g 10001 -S waysplit \
